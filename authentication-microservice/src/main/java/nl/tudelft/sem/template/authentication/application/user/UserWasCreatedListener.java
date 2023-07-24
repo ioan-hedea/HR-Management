@@ -1,5 +1,6 @@
 package nl.tudelft.sem.template.authentication.application.user;
 
+import lombok.extern.slf4j.Slf4j;
 import nl.tudelft.sem.template.authentication.domain.user.UserWasCreatedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Component;
  * which has stored events of type: UserWasCreated.
  */
 @Component
+@Slf4j
 public class UserWasCreatedListener {
     /**
      * The name of the function indicated which event is listened to.
@@ -18,7 +20,6 @@ public class UserWasCreatedListener {
      */
     @EventListener
     public void onAccountWasCreated(UserWasCreatedEvent event) {
-        // Handler code here
-        System.out.println("Account (" + event.getNetId().toString() + ") was created.");
+        log.info("Account '{}' was created", event.getNetId());
     }
 }

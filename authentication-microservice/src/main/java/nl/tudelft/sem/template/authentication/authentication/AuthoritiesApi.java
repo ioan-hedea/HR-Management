@@ -3,7 +3,6 @@ package nl.tudelft.sem.template.authentication.authentication;
 import java.util.ArrayList;
 import java.util.List;
 import nl.tudelft.sem.template.authentication.domain.user.AppUser;
-import nl.tudelft.sem.template.authentication.domain.user.Role;
 
 public class AuthoritiesApi {
     /**

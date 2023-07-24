@@ -20,7 +20,6 @@ import nl.tudelft.sem.contract.microservice.database.entities.utils.Pay;
 import nl.tudelft.sem.contract.microservice.database.repositories.JobPositionRepository;
 import nl.tudelft.sem.contract.microservice.database.repositories.SalaryScaleRepository;
 import nl.tudelft.sem.contract.microservice.services.JobPositionService;
-import org.apache.commons.lang3.builder.ToStringExclude;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;

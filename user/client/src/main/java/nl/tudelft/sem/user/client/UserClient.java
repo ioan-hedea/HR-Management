@@ -42,7 +42,6 @@ public class UserClient {
 
     /**
      * Instantiate a new user Client.
-     * XXX: Maybe this should be a singleton, to only allow one client instance?
      *
      * @param configuration the configuration to use.
      */

@@ -1,0 +1,4 @@
+CREATE DATABASE hr_user OWNER hr;
+CREATE DATABASE hr_contract OWNER hr;
+CREATE DATABASE hr_request OWNER hr;
+CREATE DATABASE hr_notification OWNER hr;

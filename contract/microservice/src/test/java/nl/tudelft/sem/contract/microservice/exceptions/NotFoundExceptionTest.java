@@ -3,7 +3,6 @@ package nl.tudelft.sem.contract.microservice.exceptions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import nl.tudelft.sem.contract.microservice.exceptions.NotFoundException;
 import org.junit.jupiter.api.Test;
 
 class NotFoundExceptionTest {

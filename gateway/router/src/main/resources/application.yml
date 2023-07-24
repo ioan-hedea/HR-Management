@@ -9,7 +9,7 @@ spring:
 eureka:
   client:
     serviceUrl:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://localhost:8761/eureka/}
   instance:
     instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
 
@@ -17,8 +17,8 @@ security:
   internal-ranges:
     - start: 10.0.0.0
       end: 10.255.255.255
-    - start: 127.16.0.0
-      end: 127.31.255.255
+    - start: 172.16.0.0
+      end: 172.31.255.255
     - start: 192.168.0.0
       end: 192.168.255.255
     - start: 127.0.0.0

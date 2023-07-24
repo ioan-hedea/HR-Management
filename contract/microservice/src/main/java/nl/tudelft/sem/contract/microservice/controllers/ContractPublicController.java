@@ -61,7 +61,6 @@ public class ContractPublicController {
 
     @PostMapping("")
     ResponseEntity<ContractDto> addContract(@RequestBody @Valid ContractDto contractDto) {
-        // XXX: internal issue #1
         if (authenticationService.hasAtLeastRole(Role.HR)) {
             contractDto.getContractParties().setEmployerId(authenticationService.getUserId());
             Contract contract = contractService.addContract(contractDto);

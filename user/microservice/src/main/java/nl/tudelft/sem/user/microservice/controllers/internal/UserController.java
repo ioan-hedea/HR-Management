@@ -140,15 +140,7 @@ public class UserController {
      */
     @PostMapping("/saveUser/{netId}")
     public ResponseEntity<UserDto> createUser(@PathVariable String netId) {
-        System.out.println(1);
-        UserEntity user;
-
-        // this way the first User created in the constructor is an ADMIN
-        if (netId.equals("ADMIN")) {
-            user = new UserEntity(netId, Role.ADMIN, "", "", "", "", "", "");
-        } else {
-            user = new UserEntity(netId, Role.CANDIDATE, "", "", "", "", "", "");
-        }
+        UserEntity user = new UserEntity(netId, Role.CANDIDATE, "", "", "", "", "", "");
         userService.addUser(user);
         return new ResponseEntity<>(user.getDto(), HttpStatus.OK);
     }
@@ -160,20 +152,17 @@ public class UserController {
      */
     @PostMapping("/updateUser")
     public ResponseEntity<UserDto> updateUser(@Valid @RequestBody UserModify update) {
-        try {
-            UserEntity user = userEntityRepository
-                    .findByNetId(authManager.getNetId())
-                    .orElseThrow(UserNotFoundException::new);
-            Role role = user.getRole();
-            System.out.println(role.toString());
-            if (!(role.equals(Role.ADMIN) || role.equals(Role.HR))) {
-                throw new ActionNotAllowedException(){};
-            }
-            UserEntity userUpdated = userService.updateUser(update);
-            UserDto userDto = userUpdated.getDto();
-            return new ResponseEntity<>(userDto, HttpStatus.OK);
-        } catch (Exception e) {
-            throw new UserNotFoundException("The user you are trying to update was not found");
+        UserEntity user = userEntityRepository
+                .findByNetId(authManager.getNetId())
+                .orElseThrow(UserNotFoundException::new);
+        Role role = user.getRole();
+
+        if (!(role.equals(Role.ADMIN) || role.equals(Role.HR))) {
+            throw new ActionNotAllowedException("Only HR or ADMIN users can update profiles") { };
         }
+
+        UserEntity userUpdated = userService.updateUser(update);
+        UserDto userDto = userUpdated.getDto();
+        return new ResponseEntity<>(userDto, HttpStatus.OK);
     }
 }

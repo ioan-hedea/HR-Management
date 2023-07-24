@@ -12,32 +12,105 @@
 | 8085 | Notification              |
 | 8761 | Service registry (Eureka) |
 
-## Important notes
 
-The `/internal` endpoint of each microservice **must** be inaccessible by public. Should probably be enforced by the gateway.
+## React frontend
 
-This template contains two microservices:
-- authentication-microservice
-- example-microservice
+A React frontend starter was added at `frontend/`.
 
-The `authentication-microservice` is responsible for registering new users and authenticating current ones. After successful authentication, this microservice will provide a JWT token which can be used to bypass the security on the `example-microservice`. This token contains the *NetID* of the user that authenticated. If your scenario includes different roles, these will have to be added to the authentication-microservice and to the JWT token. To do this, you will have to:
-- Add a concept of roles to the `AppUser`
-- Add the roles to the `UserDetails` in `JwtUserDetailsService`
-- Add the roles as claims to the JWT token in `JwtTokenGenerator`
+### 1) Start PostgreSQL (recommended)
 
-The `example-microservice` is just an example and needs to be modified to suit the domain you are modeling based on your scenario.
+```bash
+docker compose -f docker-compose.postgres.yml up -d
+```
 
-The `domain` and `application` packages contain the code for the domain layer and application layer. The code for the framework layer is the root package as *Spring* has some limitations on were certain files are located in terms of autowiring.
+This starts one Postgres instance on `localhost:5432` with separate databases:
+- `hr_auth`
+- `hr_user`
+- `hr_contract`
+- `hr_request`
+- `hr_notification`
 
-## Running the microservices
+Default credentials:
+- user: `hr`
+- password: `hr`
 
-You can run the two microservices individually by starting the Spring applications. Then, you can use *Postman* to perform the different requests:
+### 2) Start backend microservices (Postgres profile)
 
-Register:
-![image](instructions/register.png)
+One-command startup (recommended):
 
-Authenticate:
-![image](instructions/authenticate.png)
+```bash
+./scripts/backend-postgres-up.sh
+```
 
-Hello:
-![image](instructions/hello.png)
+The script now waits for each service port to be ready and prints a log tail if any service crashes.
+Runtime logs are stored in `.run/*.log`.
+It also checks the local Java runtime (use Java 11 or 17 with this Gradle setup).
+
+One-command shutdown:
+
+```bash
+./scripts/backend-postgres-down.sh
+```
+
+Manual startup is also available:
+
+Run the services you need (at minimum `authentication-microservice`, `user/microservice`, `contract/microservice`, and `request/microservice`):
+
+```bash
+SPRING_PROFILES_ACTIVE=postgres ./gradlew :authentication-microservice:bootRun
+SPRING_PROFILES_ACTIVE=postgres ./gradlew :user:microservice:bootRun
+SPRING_PROFILES_ACTIVE=postgres ./gradlew :contract:microservice:bootRun
+SPRING_PROFILES_ACTIVE=postgres ./gradlew :request:microservice:bootRun
+SPRING_PROFILES_ACTIVE=postgres ./gradlew :notification:microservice:bootRun
+```
+
+If you need to override DB connection details, use service-specific env vars:
+- auth: `AUTH_DB_URL`, `AUTH_DB_USERNAME`, `AUTH_DB_PASSWORD`
+- user: `USER_DB_URL`, `USER_DB_USERNAME`, `USER_DB_PASSWORD`
+- contract: `CONTRACT_DB_URL`, `CONTRACT_DB_USERNAME`, `CONTRACT_DB_PASSWORD`
+- request: `REQUEST_DB_URL`, `REQUEST_DB_USERNAME`, `REQUEST_DB_PASSWORD`
+- notification: `NOTIFICATION_DB_URL`, `NOTIFICATION_DB_USERNAME`, `NOTIFICATION_DB_PASSWORD`
+
+By default, authentication and user services bootstrap an `ADMIN` account. Override it with:
+- `BOOTSTRAP_ADMIN_ENABLED`
+- `BOOTSTRAP_ADMIN_NET_ID`
+- `BOOTSTRAP_ADMIN_PASSWORD`
+
+### 3) Start frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend runs at `http://localhost:5173`.
+
+### 4) Backend connection model
+
+The frontend calls local proxy paths and Vite forwards them to microservices:
+
+- `/api/auth/*` -> `http://localhost:8081/*`
+- `/api/user/*` -> `http://localhost:8082/*`
+- `/api/contract/*` -> `http://localhost:8083/*`
+- `/api/request/*` -> `http://localhost:8084/*`
+- `/api/notification/*` -> `http://localhost:8085/*`
+- `/api/gateway/*` -> `http://localhost:8080/*`
+
+Override targets by copying `frontend/.env.example` to `frontend/.env.local` and changing values.
+
+### 5) Quick test flow
+
+1. Open `http://localhost:5173`.
+2. Register a regular user, or login with the bootstrap admin account (`ADMIN` + `BOOTSTRAP_ADMIN_PASSWORD`).
+3. Login to store the JWT.
+4. Use quick checks (`Contract hello`, `Request hello`) or the request workbench to call endpoints.
+
+## CI
+
+GitHub Actions pipeline is configured in `.github/workflows/ci.yml` and runs on push/pull request:
+
+- Backend: Java 11 + Gradle 7.4, `clean assemble`, then `check` (tests + static checks).
+- Frontend: Node 20, `npm install`, then `npm run build`.
+
+Build/test reports are uploaded as workflow artifacts.

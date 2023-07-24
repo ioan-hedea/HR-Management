@@ -12,15 +12,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.util.Optional;
-import java.util.UUID;
-import nl.tudelft.sem.user.commons.entities.utils.Dto;
 import nl.tudelft.sem.user.commons.entities.utils.Role;
-import nl.tudelft.sem.user.commons.entities.utils.UserDto;
 import nl.tudelft.sem.user.commons.entities.utils.UserModify;
 import nl.tudelft.sem.user.microservice.database.entities.UserEntity;
 import nl.tudelft.sem.user.microservice.database.entities.utils.BaseEntity;
@@ -35,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
@@ -42,14 +36,13 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 @EnableWebMvc
+@ActiveProfiles("test")
 class UserServiceTest {
     private final transient MockMvc mockMvc;
-    private final transient ObjectMapper objectMapper;
 
     @Autowired
     UserServiceTest(MockMvc mockMvc) {
         this.mockMvc = mockMvc;
-        this.objectMapper = new ObjectMapper().registerModules(new Jdk8Module(), new JavaTimeModule());
     }
 
     @Mock
@@ -159,9 +152,6 @@ class UserServiceTest {
 
         userEntityRepository = mock(UserEntityRepository.class);
         userService = new UserService(userEntityRepository);
-        UserEntity user1 = new UserEntity("SomeNetId", Role.CANDIDATE, "someAddress", "SomeDescription", "SomeFirstName",
-                "SomeLastName", "SomeEmail", "SomePhoneNumber");
-
         when(userEntityRepository
                 .findByNetId(userDto.getNetId()))
                 .thenThrow(UserNotFoundException.class);
@@ -260,25 +250,19 @@ class UserServiceTest {
 
     @Test
     void userNotSaved() throws Exception {
-        UserEntity userEntity = new UserEntity("newId", Role.CANDIDATE, "", "",
-                "", "", "", "");
-        UUID uuid = userEntity.getUuid();
-        //when(userEntityRepository.findById(uuid)).thenReturn(Optional.of(userEntity));
         this.mockMvc.perform(get("/getRoleByUUID/{id}", "newId")).andExpect(status().is(401));
     }
 
     @Test
     void baseDtoNotFound() {
-        UUID uuid = UUID.randomUUID();
         BaseEntity baseEntity = null;
         assertThrows(NullPointerException.class, () -> baseEntity.getDto());
     }
 
     @Test
     void baseDtoEquals() {
-        UUID uuid = UUID.randomUUID();
-        Dto newDto = new UserDto();
-        BaseEntity baseEntity = new UserEntity("", Role.CANDIDATE, "", "", "", "", "", "");
+
+        var baseEntity = new UserEntity("", Role.CANDIDATE, "", "", "", "", "", "");
         assertNull(baseEntity.getId());
     }
 

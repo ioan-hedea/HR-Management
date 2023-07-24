@@ -14,6 +14,14 @@ public class AuthManager {
      * @return The name of the user.
      */
     public String getNetId() {
-        return SecurityContextHolder.getContext().getAuthentication().getName();
+        if (SecurityContextHolder.getContext().getAuthentication() == null) {
+            return "anonymous";
+        }
+
+        String netId = SecurityContextHolder.getContext().getAuthentication().getName();
+        if (netId == null || netId.trim().isEmpty()) {
+            return "anonymous";
+        }
+        return netId;
     }
 }

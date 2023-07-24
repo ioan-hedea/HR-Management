@@ -8,8 +8,6 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import nl.tudelft.sem.user.microservice.authentication.JwtAuthenticationEntryPoint;
-import nl.tudelft.sem.user.microservice.authentication.JwtRequestFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;

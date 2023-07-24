@@ -1,3 +1,0 @@
-include:
-  - notification/microservice/.gitlab-ci.yml
-  - notification/client/.gitlab-ci.yml

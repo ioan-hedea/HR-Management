@@ -1,3 +1,0 @@
-include:
-  - gateway/router/.gitlab-ci.yml
-  - gateway/registry/.gitlab-ci.yml

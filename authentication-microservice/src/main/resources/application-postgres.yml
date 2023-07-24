@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: ${AUTH_DB_URL:jdbc:postgresql://localhost:5432/hr_auth}
+    username: ${AUTH_DB_USERNAME:hr}
+    password: ${AUTH_DB_PASSWORD:hr}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    generate-ddl: true
+    hibernate:
+      ddl-auto: ${AUTH_DB_DDL_AUTO:update}
+    database-platform: org.hibernate.dialect.PostgreSQL10Dialect
+  h2:
+    console:
+      enabled: false

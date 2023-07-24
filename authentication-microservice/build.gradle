@@ -35,6 +35,10 @@ repositories {
 	mavenCentral()
 }
 
+ext {
+	set('springCloudVersion', "2021.0.5")
+}
+
 dependencies {
 
 	compileOnly 'org.projectlombok:lombok:1.18.24'
@@ -45,6 +49,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
 	implementation project(path: ':user:client')
 	implementation project(path: ':user:commons')
 	// https://github.com/jwtk/jjwt#dependencies
@@ -60,6 +66,7 @@ dependencies {
 
 	// Local test database (in-memory)
 	implementation 'com.h2database:h2'
+	runtimeOnly 'org.postgresql:postgresql'
 	developmentOnly 'org.hibernate:hibernate-entitymanager'
 
 	testImplementation('org.springframework.boot:spring-boot-starter-test') {
@@ -68,6 +75,12 @@ dependencies {
 	testImplementation('org.junit.jupiter:junit-jupiter:5.9.1')
 	testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.9.0'
 	testImplementation('org.assertj:assertj-core:3.23.1')
+}
+
+dependencyManagement {
+	imports {
+		mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+	}
 }
 
 configurations {

@@ -29,8 +29,7 @@ public class RoleAuthenticationService {
         try {
             String userId = authManager.getNetId();
             Role userRole = userClient.user().getUserRoleNetId(userId).join().getRole();
-            int compare = userRole.compareTo(neededRole);
-            return (compare >= 1);
+            return userRole != null && neededRole != null && userRole.getValue() <= neededRole.getValue();
         } catch (Exception e) {
             log.error("Error while authenticating user", e);
             return false;

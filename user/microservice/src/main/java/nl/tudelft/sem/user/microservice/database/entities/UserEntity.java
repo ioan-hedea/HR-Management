@@ -1,6 +1,5 @@
 package nl.tudelft.sem.user.microservice.database.entities;
 
-import java.util.Objects;
 import java.util.UUID;
 import javax.persistence.Column;
 import javax.persistence.Entity;

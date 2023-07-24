@@ -1,7 +1,6 @@
 package nl.tudelft.sem.notification.client;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;

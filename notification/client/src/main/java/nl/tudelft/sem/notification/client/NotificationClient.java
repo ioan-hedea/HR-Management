@@ -45,7 +45,6 @@ public class NotificationClient {
 
     /**
      * Instantiate a new Contract Client.
-     * XXX: Maybe this should be a singleton, to only allow one client instance?
      *
      * @param configuration the configuration to use.
      */

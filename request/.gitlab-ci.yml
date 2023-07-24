@@ -1,3 +1,0 @@
-include:
-  - request/microservice/.gitlab-ci.yml
-  - request/client/.gitlab-ci.yml

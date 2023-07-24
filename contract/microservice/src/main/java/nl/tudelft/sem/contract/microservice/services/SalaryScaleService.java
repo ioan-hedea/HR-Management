@@ -2,7 +2,6 @@ package nl.tudelft.sem.contract.microservice.services;
 
 import java.math.BigDecimal;
 import nl.tudelft.sem.contract.commons.entities.utils.StringDto;
-import nl.tudelft.sem.contract.microservice.controllers.internal.SalaryScaleController;
 import nl.tudelft.sem.contract.microservice.database.entities.SalaryScale;
 import nl.tudelft.sem.contract.microservice.database.repositories.SalaryScaleRepository;
 import org.springframework.stereotype.Service;

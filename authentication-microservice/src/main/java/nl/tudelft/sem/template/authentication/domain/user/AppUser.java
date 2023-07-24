@@ -44,7 +44,6 @@ public class AppUser extends HasEvents {
     private HashedPassword password;
     @Column(name = "role", nullable = false)
     private Role role = Role.EMPLOYEE;
-    private transient List<Authority> authorityList;
 
 
     /**

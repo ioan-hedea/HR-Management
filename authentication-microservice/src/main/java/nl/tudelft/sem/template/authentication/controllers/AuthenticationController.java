@@ -1,16 +1,18 @@
 package nl.tudelft.sem.template.authentication.controllers;
 
 import java.util.UUID;
+import javax.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import nl.tudelft.sem.template.authentication.authentication.JwtTokenGenerator;
 import nl.tudelft.sem.template.authentication.authentication.JwtUserDetailsService;
 import nl.tudelft.sem.template.authentication.domain.providers.implementations.ClientProvider;
 import nl.tudelft.sem.template.authentication.domain.user.NetId;
+import nl.tudelft.sem.template.authentication.domain.user.NetIdAlreadyInUseException;
 import nl.tudelft.sem.template.authentication.domain.user.Password;
 import nl.tudelft.sem.template.authentication.domain.user.RegistrationService;
 import nl.tudelft.sem.template.authentication.models.AuthenticationRequestModel;
 import nl.tudelft.sem.template.authentication.models.AuthenticationResponseModel;
 import nl.tudelft.sem.template.authentication.models.RegistrationRequestModel;
-import nl.tudelft.sem.user.client.UserClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +20,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
+@Slf4j
 public class AuthenticationController {
 
     private final transient AuthenticationManager authenticationManager;
@@ -65,7 +69,8 @@ public class AuthenticationController {
      * @return JWT token if the login is successful
      */
     @PostMapping("/authenticate")
-    public ResponseEntity<AuthenticationResponseModel> authenticate(@RequestBody AuthenticationRequestModel request) {
+    public ResponseEntity<AuthenticationResponseModel> authenticate(
+            @Valid @RequestBody AuthenticationRequestModel request) {
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
@@ -75,11 +80,19 @@ public class AuthenticationController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "USER_DISABLED", e);
         } catch (BadCredentialsException e) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", e);
+        } catch (AuthenticationException e) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", e);
         }
 
-        final UserDetails userDetails = jwtUserDetailsService.loadUserByUsername(request.getNetId());
-        final String jwtToken = jwtTokenGenerator.generateToken(userDetails);
-        return ResponseEntity.ok(new AuthenticationResponseModel(jwtToken));
+        try {
+            final UserDetails userDetails = jwtUserDetailsService.loadUserByUsername(request.getNetId());
+            final String jwtToken = jwtTokenGenerator.generateToken(userDetails);
+            return ResponseEntity.ok(new AuthenticationResponseModel(jwtToken));
+        } catch (RuntimeException e) {
+            log.error("Authentication pipeline failed for netId '{}'", request.getNetId(), e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Authentication service failure. Check AUTHENTICATION-SERVICE logs.", e);
+        }
     }
 
     /**
@@ -87,16 +100,25 @@ public class AuthenticationController {
      *
      * @param request The registration model
      * @return 200 OK if the registration is successful
-     * @throws Exception if a user with this netid already exists
      */
     @PostMapping("/register")
-    public ResponseEntity<UUID> register(@RequestBody RegistrationRequestModel request) throws Exception {
+    public ResponseEntity<UUID> register(@Valid @RequestBody RegistrationRequestModel request) {
+        NetId netId;
         try {
-            registrationService.registerUser(new NetId(request.getNetId()),
-                    new Password(request.getPassword()));
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+            netId = new NetId(request.getNetId());
+            registrationService.registerUser(netId, new Password(request.getPassword()));
+        } catch (NetIdAlreadyInUseException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "A user with this NetID already exists", e);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         }
-        return ResponseEntity.ok(clientProvider.userClient().user().createUser(request.getNetId()).join().getId());
+
+        try {
+            return ResponseEntity.ok(clientProvider.userClient().user().createUser(netId.toString()).join().getId());
+        } catch (Exception e) {
+            registrationService.rollbackRegistration(netId);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "User registration succeeded, but syncing with USER-SERVICE failed", e);
+        }
     }
 }

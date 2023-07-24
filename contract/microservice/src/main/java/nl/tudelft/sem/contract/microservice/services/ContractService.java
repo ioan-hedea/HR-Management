@@ -13,7 +13,6 @@ import nl.tudelft.sem.contract.microservice.database.entities.PensionScheme;
 import nl.tudelft.sem.contract.microservice.database.repositories.ContractRepository;
 import nl.tudelft.sem.contract.microservice.database.repositories.JobPositionRepository;
 import nl.tudelft.sem.contract.microservice.database.repositories.PensionSchemeRepository;
-import nl.tudelft.sem.contract.microservice.database.repositories.SalaryScaleRepository;
 import nl.tudelft.sem.contract.microservice.exceptions.ActionNotAllowedException;
 import nl.tudelft.sem.contract.microservice.exceptions.ContractNotFoundException;
 import nl.tudelft.sem.contract.microservice.exceptions.JobPositionNotFoundException;
@@ -28,15 +27,11 @@ public class ContractService {
 
     private final transient PensionSchemeRepository pensionSchemeRepository;
 
-    private final transient SalaryScaleRepository salaryScaleRepository;
-
     ContractService(ContractRepository contractRepository, JobPositionRepository jobPositionRepository,
-                    PensionSchemeRepository pensionSchemeRepository,
-                    SalaryScaleRepository salaryScaleRepository) {
+                    PensionSchemeRepository pensionSchemeRepository) {
         this.contractRepository = contractRepository;
         this.jobPositionRepository = jobPositionRepository;
         this.pensionSchemeRepository = pensionSchemeRepository;
-        this.salaryScaleRepository = salaryScaleRepository;
     }
 
     /**

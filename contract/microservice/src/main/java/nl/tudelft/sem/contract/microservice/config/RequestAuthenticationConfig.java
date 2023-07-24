@@ -27,8 +27,8 @@ public class RequestAuthenticationConfig extends WebSecurityConfigurerAdapter {
         http.headers().frameOptions().sameOrigin()
                 .and().csrf().disable()
                 .authorizeRequests()
-                .antMatchers("/internal/**").permitAll() // XXX: This should be secured somehow (maybe IP whitelist)
-                .antMatchers("/actuator/**").permitAll() // XXX: As above, needs to be properly secured
+                .antMatchers("/internal/**").permitAll()
+                .antMatchers("/actuator/**").permitAll()
                 .antMatchers("/h2-console/**").permitAll()
                 .antMatchers("/v3/api-docs/**").permitAll()
                 .anyRequest().authenticated()

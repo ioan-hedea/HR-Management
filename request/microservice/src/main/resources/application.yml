@@ -4,12 +4,31 @@ server:
 
 # Secret for the JWT signing
 jwt:
-  secret: T2hJKTHD4D+59wwX3WG28cOD7o1haIHgYY2HaIv7XZE46bWvRDfnZBDHfSzGaDAcF/XZ+B42f2rpUE9uISN5ag==
+  secret: ${JWT_SECRET:T2hJKTHD4D+59wwX3WG28cOD7o1haIHgYY2HaIv7XZE46bWvRDfnZBDHfSzGaDAcF/XZ+B42f2rpUE9uISN5ag==}
 
 springdoc:
   swagger-ui:
     enabled: false
 
 spring:
+  application:
+    name: REQUEST-SERVICE
   h2:
     console.enabled: true
+  datasource:
+    url: jdbc:h2:./request/microservice/request;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    generate-ddl: true
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.H2Dialect
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://localhost:8761/eureka/}
+  instance:
+    instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}

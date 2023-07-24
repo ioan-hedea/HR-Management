@@ -1,7 +1,6 @@
 package nl.tudelft.sem.user.microservice.service;
 
 import java.util.Objects;
-import java.util.UUID;
 import javax.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import nl.tudelft.sem.user.commons.entities.utils.Role;
@@ -46,7 +45,7 @@ public class UserService {
             userEntityRepository.save(updatedUser);
         } catch (Exception e) {
             log.error("Could not save updated user", e);
-            return null;
+            throw new IllegalStateException("Could not persist updated user");
         }
         log.debug("Updated user with netId: {}", userDto.getNetId());
         return updatedUser;

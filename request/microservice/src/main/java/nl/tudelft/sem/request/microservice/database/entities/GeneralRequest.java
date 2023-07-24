@@ -49,7 +49,6 @@ public class GeneralRequest extends BaseEntity<RequestDto> {
 
     private String responseBody;
 
-    @NotNull
     private LocalDateTime responseDate;
 
     private LocalDateTime startDate;
@@ -121,7 +120,7 @@ public class GeneralRequest extends BaseEntity<RequestDto> {
         this.responseBody = responseBody;
     }
 
-    public void setResponseDate(@NotNull LocalDateTime responseDate) {
+    public void setResponseDate(LocalDateTime responseDate) {
         this.responseDate = responseDate;
     }
 

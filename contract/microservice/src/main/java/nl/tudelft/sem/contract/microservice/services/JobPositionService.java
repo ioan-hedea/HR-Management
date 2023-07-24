@@ -1,8 +1,6 @@
 package nl.tudelft.sem.contract.microservice.services;
 
-import java.util.Optional;
-import javax.validation.Valid;
-import nl.tudelft.sem.contract.commons.entities.JobPositionDto;
+
 import nl.tudelft.sem.contract.commons.entities.SalaryScaleDto;
 import nl.tudelft.sem.contract.commons.entities.utils.StringDto;
 import nl.tudelft.sem.contract.microservice.database.entities.JobPosition;

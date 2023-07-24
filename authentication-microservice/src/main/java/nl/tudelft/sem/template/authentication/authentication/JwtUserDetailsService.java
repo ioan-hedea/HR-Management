@@ -1,6 +1,5 @@
 package nl.tudelft.sem.template.authentication.authentication;
 
-import java.util.Objects;
 import nl.tudelft.sem.template.authentication.domain.user.NetId;
 import nl.tudelft.sem.template.authentication.domain.user.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;

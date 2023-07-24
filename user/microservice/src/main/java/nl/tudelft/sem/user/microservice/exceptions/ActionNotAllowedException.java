@@ -9,7 +9,7 @@ public abstract class ActionNotAllowedException extends IllegalStateException {
      * @param message exception message
      */
     public ActionNotAllowedException(String message) {
-        super();
+        super(message);
     }
 
     /**

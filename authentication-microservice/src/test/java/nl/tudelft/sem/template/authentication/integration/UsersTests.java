@@ -21,17 +21,15 @@ import nl.tudelft.sem.template.authentication.domain.user.Password;
 import nl.tudelft.sem.template.authentication.domain.user.PasswordHashingService;
 import nl.tudelft.sem.template.authentication.domain.user.Role;
 import nl.tudelft.sem.template.authentication.domain.user.UserRepository;
-import nl.tudelft.sem.template.authentication.framework.integration.utils.JsonUtil;
+import nl.tudelft.sem.template.authentication.integration.utils.JsonUtil;
 import nl.tudelft.sem.template.authentication.models.AuthenticationRequestModel;
 import nl.tudelft.sem.template.authentication.models.AuthenticationResponseModel;
 import nl.tudelft.sem.template.authentication.models.RegistrationRequestModel;
 import nl.tudelft.sem.user.client.UserClient;
-import nl.tudelft.sem.user.client.UserClientConfiguration;
 import nl.tudelft.sem.user.client.UserData;
 import nl.tudelft.sem.user.commons.entities.utils.UserDto;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -46,8 +44,6 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
-
-
 
 @SpringBootTest
 @ExtendWith(SpringExtension.class)
@@ -119,7 +115,7 @@ public class UsersTests {
     }
 
     @Test
-    public void register_withExistingUser_throwsException() throws Exception {
+    public void register_withExistingUser_returnsConflict() throws Exception {
         // Arrange
         final NetId testUser = new NetId("SomeUser");
         final Password newTestPassword = new Password("password456");
@@ -138,7 +134,7 @@ public class UsersTests {
                 .content(JsonUtil.serialize(model)));
 
         // Assert
-        resultActions.andExpect(status().isBadRequest());
+        resultActions.andExpect(status().isConflict());
 
         AppUser savedUser = userRepository.findByNetId(testUser).orElseThrow();
 

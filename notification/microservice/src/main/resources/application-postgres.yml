@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: ${NOTIFICATION_DB_URL:jdbc:postgresql://localhost:5432/hr_notification}
+    username: ${NOTIFICATION_DB_USERNAME:hr}
+    password: ${NOTIFICATION_DB_PASSWORD:hr}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    generate-ddl: true
+    hibernate:
+      ddl-auto: ${NOTIFICATION_DB_DDL_AUTO:update}
+    database-platform: org.hibernate.dialect.PostgreSQL10Dialect
+  h2:
+    console:
+      enabled: false

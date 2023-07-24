@@ -1,16 +1,12 @@
 package nl.tudelft.sem.notification.microservice.controllers;
 
-import java.util.Collection;
-import java.util.UUID;
-import java.util.stream.Collectors;
+
 import javax.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import nl.tudelft.sem.notification.commons.entities.MessageCollectionDto;
 import nl.tudelft.sem.notification.commons.entities.MessageDto;
 import nl.tudelft.sem.notification.commons.entities.UuidCollectionDto;
 import nl.tudelft.sem.notification.commons.entities.UuidDto;
-import nl.tudelft.sem.notification.microservice.database.entities.MessageEntity;
-import nl.tudelft.sem.notification.microservice.database.repositories.MessageEntityRepository;
 import nl.tudelft.sem.notification.microservice.services.MessageDispatcher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;

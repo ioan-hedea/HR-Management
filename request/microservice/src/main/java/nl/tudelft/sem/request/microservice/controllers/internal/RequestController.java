@@ -3,16 +3,16 @@ package nl.tudelft.sem.request.microservice.controllers.internal;
 import static nl.tudelft.sem.request.commons.ApiData.INTERNAL_PATH;
 
 import java.net.URI;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import javax.validation.Valid;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
-import nl.tudelft.sem.contract.client.ContractClient;
-import nl.tudelft.sem.contract.client.ContractClientConfiguration;
 import nl.tudelft.sem.contract.commons.entities.ContractModificationDto;
 import nl.tudelft.sem.request.commons.entities.RequestDto;
 import nl.tudelft.sem.request.commons.entities.RequestStatus;
+import nl.tudelft.sem.request.microservice.authentication.AuthManager;
 import nl.tudelft.sem.request.microservice.database.entities.GeneralRequest;
 import nl.tudelft.sem.request.microservice.database.entities.utils.RequestSpecification;
 import nl.tudelft.sem.request.microservice.database.repositories.RequestRepository;
@@ -39,6 +39,7 @@ public class RequestController {
     private final transient RequestRepository requestRepository;
 
     private final transient RequestService requestService;
+    private final transient AuthManager authManager;
 
 
     /**
@@ -46,9 +47,12 @@ public class RequestController {
      *
      * @param requestRepository Repository for the requests.
      */
-    public RequestController(@NonNull RequestRepository requestRepository, RequestService requestService) {
+    public RequestController(@NonNull RequestRepository requestRepository,
+                             RequestService requestService,
+                             AuthManager authManager) {
         this.requestRepository = requestRepository;
         this.requestService = requestService;
+        this.authManager = authManager;
     }
 
     /**
@@ -59,7 +63,22 @@ public class RequestController {
      */
     @PostMapping
     ResponseEntity<RequestDto> createRequest(@RequestBody RequestDto requestDto) {
-        GeneralRequest request = requestRepository.save(new GeneralRequest(requestDto));
+        LocalDateTime requestDate = requestDto.getRequestDate() != null ? requestDto.getRequestDate() : LocalDateTime.now();
+        String author = authManager.getNetId();
+
+        GeneralRequest request = GeneralRequest.builder()
+                .id(UUID.randomUUID())
+                .status(RequestStatus.OPEN)
+                .author(author)
+                .contractId(requestDto.getContractId())
+                .requestBody(requestDto.getRequestBody())
+                .requestDate(requestDate)
+                .responseBody(null)
+                .responseDate(null)
+                .startDate(requestDto.getStartDate())
+                .numberOfDays(requestDto.getNumberOfDays())
+                .build();
+        request = requestRepository.save(request);
         return ResponseEntity.created(URI.create(INTERNAL_PATH + "/request/" + request.getId())).body(request.getDto());
     }
 

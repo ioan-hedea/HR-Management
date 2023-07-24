@@ -1,8 +1,0 @@
-include:
-  - authentication-microservice/.gitlab-ci.yml
-  - example-microservice/.gitlab-ci.yml
-  - contract/.gitlab-ci.yml
-  - user/.gitlab-ci.yml
-  - gateway/.gitlab-ci.yml
-  - notification/.gitlab-ci.yml
-  - request/.gitlab-ci.yml

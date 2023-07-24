@@ -3,7 +3,6 @@ package nl.tudelft.sem.contract.client;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import lombok.Builder;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import nl.tudelft.sem.contract.commons.entities.ActionSuccessDto;

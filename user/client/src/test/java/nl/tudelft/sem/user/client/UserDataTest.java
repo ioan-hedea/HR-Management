@@ -1,7 +1,6 @@
 package nl.tudelft.sem.user.client;
 
 import static nl.tudelft.sem.user.client.TestHelpers.getUuid;
-import static org.junit.Assert.assertNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;

@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: ${CONTRACT_DB_URL:jdbc:postgresql://localhost:5432/hr_contract}
+    username: ${CONTRACT_DB_USERNAME:hr}
+    password: ${CONTRACT_DB_PASSWORD:hr}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    generate-ddl: true
+    hibernate:
+      ddl-auto: ${CONTRACT_DB_DDL_AUTO:update}
+    database-platform: org.hibernate.dialect.PostgreSQL10Dialect
+  h2:
+    console:
+      enabled: false

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonView;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import nl.tudelft.sem.request.commons.entities.utils.Dto;

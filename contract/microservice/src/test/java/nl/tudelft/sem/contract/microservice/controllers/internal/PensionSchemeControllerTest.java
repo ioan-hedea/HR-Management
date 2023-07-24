@@ -69,11 +69,6 @@ public class PensionSchemeControllerTest {
                 .name("You get nothing")
                 .build();
 
-        PensionScheme pensionScheme = PensionScheme.builder()
-                .id(TestHelpers.getUuid(1))
-                .name("You get nothing")
-                .build();
-
         when(pensionSchemeRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         this.mockMvc.perform(MockMvcRequestBuilders.post("/internal/pension-scheme")

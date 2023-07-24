@@ -1,3 +1,0 @@
-include:
-  - contract/microservice/.gitlab-ci.yml
-  - contract/client/.gitlab-ci.yml

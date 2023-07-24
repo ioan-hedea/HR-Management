@@ -34,6 +34,7 @@ public class RoutingService {
     @Bean
     public RouteLocator configureRoute(RouteLocatorBuilder builder) {
         RouteLocatorBuilder.Builder routeBuilder = builder.routes();
+        routeBuilder = addRoute(routeBuilder, "auth", "auth", "lb://AUTHENTICATION-SERVICE");
         routeBuilder = addRoute(routeBuilder, "contract", "contract", "lb://CONTRACT-SERVICE");
         routeBuilder = addRoute(routeBuilder, "notification", "notification", "lb://NOTIFICATION-SERVICE");
         routeBuilder = addRoute(routeBuilder, "user", "user", "lb://USER-SERVICE");

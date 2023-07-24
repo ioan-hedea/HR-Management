@@ -18,4 +18,11 @@ public interface UserRepository extends JpaRepository<AppUser, String> {
      * Check if an existing user already uses a NetID.
      */
     boolean existsByNetId(NetId netId);
+
+    /**
+     * Delete a user by NetID.
+     *
+     * @param netId The NetID to delete.
+     */
+    void deleteByNetId(NetId netId);
 }

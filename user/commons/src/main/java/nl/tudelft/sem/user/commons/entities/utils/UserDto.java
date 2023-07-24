@@ -3,7 +3,6 @@ package nl.tudelft.sem.user.commons.entities.utils;
 import com.fasterxml.jackson.annotation.JsonView;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
