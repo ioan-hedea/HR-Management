@@ -19,6 +19,16 @@ A React frontend starter was added at `frontend/`.
 
 ### 1) Start PostgreSQL (recommended)
 
+First, create local env values:
+
+```bash
+cp .env.example .env.local
+```
+
+Fill in real secret values in `.env.local`.
+
+Then start PostgreSQL:
+
 ```bash
 docker compose -f docker-compose.postgres.yml up -d
 ```
@@ -29,10 +39,6 @@ This starts one Postgres instance on `localhost:5432` with separate databases:
 - `hr_contract`
 - `hr_request`
 - `hr_notification`
-
-Default credentials:
-- user: `hr`
-- password: `hr`
 
 ### 2) Start backend microservices (Postgres profile)
 
@@ -45,6 +51,7 @@ One-command startup (recommended):
 The script now waits for each service port to be ready and prints a log tail if any service crashes.
 Runtime logs are stored in `.run/*.log`.
 It also checks the local Java runtime (use Java 11 or 17 with this Gradle setup).
+It loads `.env.local` (or `.env`) and fails fast when required secrets are missing.
 
 One-command shutdown:
 
@@ -114,3 +121,17 @@ GitHub Actions pipeline is configured in `.github/workflows/ci.yml` and runs on 
 - Frontend: Node 20, `npm install`, then `npm run build`.
 
 Build/test reports are uploaded as workflow artifacts.
+
+### Required GitHub Secrets
+
+Add these in repository settings: `Settings` -> `Secrets and variables` -> `Actions`:
+
+- `JWT_SECRET`
+- `BOOTSTRAP_ADMIN_PASSWORD`
+- `MAIL_USERNAME`
+- `MAIL_PASSWORD`
+- `AUTH_DB_PASSWORD`
+- `USER_DB_PASSWORD`
+- `CONTRACT_DB_PASSWORD`
+- `REQUEST_DB_PASSWORD`
+- `NOTIFICATION_DB_PASSWORD`

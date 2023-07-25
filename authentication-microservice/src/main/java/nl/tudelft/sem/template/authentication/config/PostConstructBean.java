@@ -32,7 +32,7 @@ public class PostConstructBean {
                              PasswordHashingService passwordHashingService,
                              @Value("${bootstrap.admin.enabled:true}") boolean bootstrapAdminEnabled,
                              @Value("${bootstrap.admin.net-id:ADMIN}") String bootstrapAdminNetId,
-                             @Value("${bootstrap.admin.password:ChangeMe123!}") String bootstrapAdminPassword) {
+                             @Value("${bootstrap.admin.password:}") String bootstrapAdminPassword) {
 
         this.userRepository = userRepository;
         this.passwordHashingService = passwordHashingService;

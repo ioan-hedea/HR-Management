@@ -8,6 +8,47 @@ mkdir -p "${RUN_DIR}"
 
 cd "${ROOT_DIR}"
 
+if [[ -f "${ROOT_DIR}/.env.local" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${ROOT_DIR}/.env.local"
+  set +a
+elif [[ -f "${ROOT_DIR}/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${ROOT_DIR}/.env"
+  set +a
+fi
+
+required_vars=(
+  JWT_SECRET
+  BOOTSTRAP_ADMIN_PASSWORD
+  POSTGRES_USER
+  POSTGRES_PASSWORD
+  POSTGRES_DB
+  AUTH_DB_PASSWORD
+  USER_DB_PASSWORD
+  CONTRACT_DB_PASSWORD
+  REQUEST_DB_PASSWORD
+  NOTIFICATION_DB_PASSWORD
+  MAIL_USERNAME
+  MAIL_PASSWORD
+)
+
+missing_vars=()
+for var_name in "${required_vars[@]}"; do
+  if [[ -z "${!var_name:-}" ]]; then
+    missing_vars+=("${var_name}")
+  fi
+done
+
+if (( ${#missing_vars[@]} > 0 )); then
+  echo "[error] Missing required environment variables:"
+  printf '  - %s\n' "${missing_vars[@]}"
+  echo "Create .env.local from .env.example and set real values, then rerun."
+  exit 1
+fi
+
 JAVA_VERSION="$(
   java -version 2>&1 | awk -F[\".] '/version/ {print $2; exit}'
 )"

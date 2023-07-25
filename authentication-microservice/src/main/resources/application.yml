@@ -4,7 +4,7 @@ server:
 
 # Secret for the JWT signing
 jwt:
-  secret: ${JWT_SECRET:T2hJKTHD4D+59wwX3WG28cOD7o1haIHgYY2HaIv7XZE46bWvRDfnZBDHfSzGaDAcF/XZ+B42f2rpUE9uISN5ag==}
+  secret: ${JWT_SECRET}
 
 springdoc:
   swagger-ui:
@@ -37,4 +37,4 @@ bootstrap:
   admin:
     enabled: ${BOOTSTRAP_ADMIN_ENABLED:true}
     net-id: ${BOOTSTRAP_ADMIN_NET_ID:ADMIN}
-    password: ${BOOTSTRAP_ADMIN_PASSWORD:ChangeMe123!}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD}

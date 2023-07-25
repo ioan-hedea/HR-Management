@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class DefaultController {
 
     private final transient AuthManager authManager;
+
     /**
      * Instantiates a new controller.
      *
@@ -19,7 +20,4 @@ public class DefaultController {
     public DefaultController(AuthManager authManager) {
         this.authManager = authManager;
     }
-
-
-
 }

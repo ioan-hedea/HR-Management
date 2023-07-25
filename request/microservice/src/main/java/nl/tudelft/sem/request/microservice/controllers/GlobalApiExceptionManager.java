@@ -33,6 +33,12 @@ public class GlobalApiExceptionManager {
         return new ApiError(HttpStatus.BAD_REQUEST.value(), ex.getMessage());
     }
 
+    /**
+     * Handles malformed JSON payloads and returns a user-friendly validation message.
+     *
+     * @param ex source parsing exception
+     * @return normalized API error response
+     */
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ResponseBody
     @ExceptionHandler({HttpMessageNotReadableException.class})

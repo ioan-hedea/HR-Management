@@ -4,7 +4,7 @@ server:
 
 # Secret for the JWT signing
 jwt:
-  secret: ${JWT_SECRET:T2hJKTHD4D+59wwX3WG28cOD7o1haIHgYY2HaIv7XZE46bWvRDfnZBDHfSzGaDAcF/XZ+B42f2rpUE9uISN5ag==}
+  secret: ${JWT_SECRET}
 
 springdoc:
   swagger-ui:
