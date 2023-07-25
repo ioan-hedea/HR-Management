@@ -21,15 +21,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 50
     env:
-      JWT_SECRET: ${{ secrets.JWT_SECRET }}
-      BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.BOOTSTRAP_ADMIN_PASSWORD }}
-      MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
-      MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
-      AUTH_DB_PASSWORD: ${{ secrets.AUTH_DB_PASSWORD }}
-      USER_DB_PASSWORD: ${{ secrets.USER_DB_PASSWORD }}
-      CONTRACT_DB_PASSWORD: ${{ secrets.CONTRACT_DB_PASSWORD }}
-      REQUEST_DB_PASSWORD: ${{ secrets.REQUEST_DB_PASSWORD }}
-      NOTIFICATION_DB_PASSWORD: ${{ secrets.NOTIFICATION_DB_PASSWORD }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET != '' && secrets.JWT_SECRET || 'VEVTVF9TRUNSRVRfVEVTVF9TRUNSRVRfVEVTVF9TRUNSRVRfVEVTVF9TRUNSRVRfVEVTVF9TRUNSRVQxMjM0NQ==' }}
+      BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.BOOTSTRAP_ADMIN_PASSWORD != '' && secrets.BOOTSTRAP_ADMIN_PASSWORD || 'ci-admin-password-123' }}
+      MAIL_USERNAME: ${{ secrets.MAIL_USERNAME != '' && secrets.MAIL_USERNAME || 'ci@example.com' }}
+      MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD != '' && secrets.MAIL_PASSWORD || 'ci-mail-password-123' }}
+      AUTH_DB_PASSWORD: ${{ secrets.AUTH_DB_PASSWORD != '' && secrets.AUTH_DB_PASSWORD || 'ci-db-password-123' }}
+      USER_DB_PASSWORD: ${{ secrets.USER_DB_PASSWORD != '' && secrets.USER_DB_PASSWORD || 'ci-db-password-123' }}
+      CONTRACT_DB_PASSWORD: ${{ secrets.CONTRACT_DB_PASSWORD != '' && secrets.CONTRACT_DB_PASSWORD || 'ci-db-password-123' }}
+      REQUEST_DB_PASSWORD: ${{ secrets.REQUEST_DB_PASSWORD != '' && secrets.REQUEST_DB_PASSWORD || 'ci-db-password-123' }}
+      NOTIFICATION_DB_PASSWORD: ${{ secrets.NOTIFICATION_DB_PASSWORD != '' && secrets.NOTIFICATION_DB_PASSWORD || 'ci-db-password-123' }}
 
     steps:
       - name: Checkout

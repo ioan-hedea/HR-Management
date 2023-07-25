@@ -1,89 +1,43 @@
 # HR Management
 
-## Port map
+HR Management is a microservices-based backend with a React frontend portal.
 
-| Port | Service                   |
-|------|---------------------------|
-| 8080 | API gateway               |
-| 8081 | Authentication            |
-| 8082 | User                      |
-| 8083 | Contract                  |
-| 8084 | Request                   |
-| 8085 | Notification              |
-| 8761 | Service registry (Eureka) |
+## Services and Ports
 
+| Port | Service |
+|------|---------|
+| 8080 | API Gateway |
+| 8081 | Authentication service |
+| 8082 | User service |
+| 8083 | Contract service |
+| 8084 | Request service |
+| 8085 | Notification service |
+| 8761 | Eureka service registry |
+| 5432 | PostgreSQL |
+| 5173 | Frontend (Vite dev server) |
 
-## React frontend
+## Prerequisites
 
-A React frontend starter was added at `frontend/`.
+- Java 11 or 17 (Gradle 7.4 is not compatible with Java 22+)
+- Docker + Docker Compose
+- Node.js 20+
 
-### 1) Start PostgreSQL (recommended)
+## Quick Start (Recommended)
 
-First, create local env values:
+1. Create local environment values:
 
 ```bash
 cp .env.example .env.local
 ```
 
-Fill in real secret values in `.env.local`.
-
-Then start PostgreSQL:
-
-```bash
-docker compose -f docker-compose.postgres.yml up -d
-```
-
-This starts one Postgres instance on `localhost:5432` with separate databases:
-- `hr_auth`
-- `hr_user`
-- `hr_contract`
-- `hr_request`
-- `hr_notification`
-
-### 2) Start backend microservices (Postgres profile)
-
-One-command startup (recommended):
+2. Update `.env.local` with real secrets.
+3. Start Postgres + backend:
 
 ```bash
 ./scripts/backend-postgres-up.sh
 ```
 
-The script now waits for each service port to be ready and prints a log tail if any service crashes.
-Runtime logs are stored in `.run/*.log`.
-It also checks the local Java runtime (use Java 11 or 17 with this Gradle setup).
-It loads `.env.local` (or `.env`) and fails fast when required secrets are missing.
-
-One-command shutdown:
-
-```bash
-./scripts/backend-postgres-down.sh
-```
-
-Manual startup is also available:
-
-Run the services you need (at minimum `authentication-microservice`, `user/microservice`, `contract/microservice`, and `request/microservice`):
-
-```bash
-SPRING_PROFILES_ACTIVE=postgres ./gradlew :authentication-microservice:bootRun
-SPRING_PROFILES_ACTIVE=postgres ./gradlew :user:microservice:bootRun
-SPRING_PROFILES_ACTIVE=postgres ./gradlew :contract:microservice:bootRun
-SPRING_PROFILES_ACTIVE=postgres ./gradlew :request:microservice:bootRun
-SPRING_PROFILES_ACTIVE=postgres ./gradlew :notification:microservice:bootRun
-```
-
-If you need to override DB connection details, use service-specific env vars:
-- auth: `AUTH_DB_URL`, `AUTH_DB_USERNAME`, `AUTH_DB_PASSWORD`
-- user: `USER_DB_URL`, `USER_DB_USERNAME`, `USER_DB_PASSWORD`
-- contract: `CONTRACT_DB_URL`, `CONTRACT_DB_USERNAME`, `CONTRACT_DB_PASSWORD`
-- request: `REQUEST_DB_URL`, `REQUEST_DB_USERNAME`, `REQUEST_DB_PASSWORD`
-- notification: `NOTIFICATION_DB_URL`, `NOTIFICATION_DB_USERNAME`, `NOTIFICATION_DB_PASSWORD`
-
-By default, authentication and user services bootstrap an `ADMIN` account. Override it with:
-- `BOOTSTRAP_ADMIN_ENABLED`
-- `BOOTSTRAP_ADMIN_NET_ID`
-- `BOOTSTRAP_ADMIN_PASSWORD`
-
-### 3) Start frontend
+4. Start frontend:
 
 ```bash
 cd frontend
@@ -91,11 +45,55 @@ npm install
 npm run dev
 ```
 
-The frontend runs at `http://localhost:5173`.
+5. Open `http://localhost:5173`.
 
-### 4) Backend connection model
+Stop backend and Postgres:
 
-The frontend calls local proxy paths and Vite forwards them to microservices:
+```bash
+./scripts/backend-postgres-down.sh
+```
+
+## Local Environment Variables
+
+`./scripts/backend-postgres-up.sh` loads `.env.local` (or `.env`) and exits early if required values are missing.
+
+Core variables:
+
+- `JWT_SECRET`
+- `BOOTSTRAP_ADMIN_ENABLED`
+- `BOOTSTRAP_ADMIN_NET_ID`
+- `BOOTSTRAP_ADMIN_PASSWORD`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_DB`
+- `AUTH_DB_URL`, `AUTH_DB_USERNAME`, `AUTH_DB_PASSWORD`
+- `USER_DB_URL`, `USER_DB_USERNAME`, `USER_DB_PASSWORD`
+- `CONTRACT_DB_URL`, `CONTRACT_DB_USERNAME`, `CONTRACT_DB_PASSWORD`
+- `REQUEST_DB_URL`, `REQUEST_DB_USERNAME`, `REQUEST_DB_PASSWORD`
+- `NOTIFICATION_DB_URL`, `NOTIFICATION_DB_USERNAME`, `NOTIFICATION_DB_PASSWORD`
+- `MAIL_USERNAME`, `MAIL_PASSWORD`
+
+See `.env.example` for the full template.
+
+## PostgreSQL Setup
+
+The compose file starts one Postgres container and auto-creates:
+
+- `hr_auth`
+- `hr_user`
+- `hr_contract`
+- `hr_request`
+- `hr_notification`
+
+Manual start command:
+
+```bash
+docker compose -f docker-compose.postgres.yml up -d
+```
+
+## Frontend Routing
+
+Frontend is in `frontend/` and uses Vite proxy routing:
 
 - `/api/auth/*` -> `http://localhost:8081/*`
 - `/api/user/*` -> `http://localhost:8082/*`
@@ -104,27 +102,27 @@ The frontend calls local proxy paths and Vite forwards them to microservices:
 - `/api/notification/*` -> `http://localhost:8085/*`
 - `/api/gateway/*` -> `http://localhost:8080/*`
 
-Override targets by copying `frontend/.env.example` to `frontend/.env.local` and changing values.
+To customize targets, copy `frontend/.env.example` to `frontend/.env.local`.
 
-### 5) Quick test flow
+## Default Admin Bootstrap
 
-1. Open `http://localhost:5173`.
-2. Register a regular user, or login with the bootstrap admin account (`ADMIN` + `BOOTSTRAP_ADMIN_PASSWORD`).
-3. Login to store the JWT.
-4. Use quick checks (`Contract hello`, `Request hello`) or the request workbench to call endpoints.
+Authentication and User services can bootstrap an admin account on startup.
 
-## CI
+- NetID defaults to `ADMIN` (override via `BOOTSTRAP_ADMIN_NET_ID`)
+- Password is always read from `BOOTSTRAP_ADMIN_PASSWORD`
+- Disable bootstrap after first run with `BOOTSTRAP_ADMIN_ENABLED=false`
 
-GitHub Actions pipeline is configured in `.github/workflows/ci.yml` and runs on push/pull request:
+## CI/CD (GitHub Actions)
 
-- Backend: Java 11 + Gradle 7.4, `clean assemble`, then `check` (tests + static checks).
-- Frontend: Node 20, `npm install`, then `npm run build`.
+Workflow: `.github/workflows/ci.yml`
 
-Build/test reports are uploaded as workflow artifacts.
+- Backend: Gradle assemble + check
+- Frontend: npm install + build
+- Artifacts: reports and frontend dist uploads
 
 ### Required GitHub Secrets
 
-Add these in repository settings: `Settings` -> `Secrets and variables` -> `Actions`:
+Set these at `Settings -> Secrets and variables -> Actions`:
 
 - `JWT_SECRET`
 - `BOOTSTRAP_ADMIN_PASSWORD`
@@ -135,3 +133,11 @@ Add these in repository settings: `Settings` -> `Secrets and variables` -> `Acti
 - `CONTRACT_DB_PASSWORD`
 - `REQUEST_DB_PASSWORD`
 - `NOTIFICATION_DB_PASSWORD`
+
+Codespaces can use the same names for parity with CI.
+
+## Troubleshooting
+
+- Java error about version: switch to Java 17 (or 11), then retry.
+- Backend start failures: inspect `.run/*.log`.
+- Authentication login issues: confirm `ADMIN` exists in `hr_auth.users` and secrets are loaded.
