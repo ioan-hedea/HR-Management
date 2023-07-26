@@ -9,7 +9,14 @@ export class ApiError extends Error {
 
 export async function apiRequest(
   url,
-  { method = "GET", body, token, headers = {} } = {}
+  {
+    method = "GET",
+    body,
+    rawBody,
+    token,
+    headers = {},
+    responseType = "json"
+  } = {}
 ) {
   const requestHeaders = {
     Accept: "application/json",
@@ -20,25 +27,38 @@ export async function apiRequest(
     requestHeaders.Authorization = `Bearer ${token}`;
   }
 
-  const hasBody = body !== undefined && body !== null;
-  if (hasBody) {
+  const hasRawBody = rawBody !== undefined && rawBody !== null;
+  const hasJsonBody = body !== undefined && body !== null;
+  if (hasJsonBody) {
     requestHeaders["Content-Type"] = "application/json";
   }
 
   const response = await fetch(url, {
     method,
     headers: requestHeaders,
-    body: hasBody ? JSON.stringify(body) : undefined
+    body: hasRawBody ? rawBody : (hasJsonBody ? JSON.stringify(body) : undefined)
   });
+
+  if (response.ok && responseType === "blob") {
+    return {
+      status: response.status,
+      data: await response.blob(),
+      headers: response.headers
+    };
+  }
 
   const rawText = await response.text();
   let parsedPayload = null;
 
   if (rawText) {
-    try {
-      parsedPayload = JSON.parse(rawText);
-    } catch (_error) {
+    if (responseType === "text") {
       parsedPayload = rawText;
+    } else {
+      try {
+        parsedPayload = JSON.parse(rawText);
+      } catch (_error) {
+        parsedPayload = rawText;
+      }
     }
   }
 
@@ -48,6 +68,7 @@ export async function apiRequest(
 
   return {
     status: response.status,
-    data: parsedPayload
+    data: parsedPayload,
+    headers: response.headers
   };
 }

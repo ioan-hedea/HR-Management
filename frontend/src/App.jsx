@@ -1,321 +1,57 @@
 import { useEffect, useMemo, useState } from "react";
-import { ApiError, apiRequest } from "./api";
-
-const TOKEN_STORAGE_KEY = "hr_frontend_token";
-const NETID_STORAGE_KEY = "hr_frontend_netid";
-const REMEMBER_SESSION_KEY = "hr_frontend_remember";
-
-const PORTAL_ACTIONS = [
-  {
-    id: "contract-hello",
-    label: "Contract hello",
-    service: "contract",
-    path: "/hello",
-    method: "GET",
-    requiresToken: true,
-    minRole: "USER"
-  },
-  {
-    id: "request-hello",
-    label: "Request hello",
-    service: "request",
-    path: "/hello",
-    method: "GET",
-    requiresToken: true,
-    minRole: "USER"
-  },
-  {
-    id: "list-users",
-    label: "List all users",
-    service: "user",
-    path: "/internal/user/getAllNetIds",
-    method: "GET",
-    requiresToken: true,
-    minRole: "ADMIN"
-  },
-  {
-    id: "open-requests",
-    label: "Open requests",
-    service: "request",
-    path: "/internal/request/open",
-    method: "GET",
-    requiresToken: true,
-    minRole: "ADMIN"
-  }
-];
-
-const PORTAL_ROUTES = [
-  {
-    id: "me",
-    path: "/portal/me",
-    label: "My Portal",
-    group: "workspace",
-    minRole: "USER",
-    title: "Personal Dashboard",
-    description: "See your session details and run user-safe quick actions."
-  },
-  {
-    id: "requests",
-    path: "/portal/requests",
-    label: "Requests",
-    group: "workspace",
-    minRole: "USER",
-    title: "Requests Workspace",
-    description: "Use guided HR actions and forms from one workspace."
-  },
-  {
-    id: "admin",
-    path: "/portal/admin",
-    label: "Admin Center",
-    group: "administration",
-    minRole: "ADMIN",
-    title: "Administration",
-    description: "Manage users and run internal admin operations."
-  }
-];
-
-const SIDEBAR_GROUPS = [
-  { id: "workspace", label: "Workspace" },
-  { id: "administration", label: "Administration" }
-];
-
-const USER_ROLES = ["CANDIDATE", "EMPLOYEE", "HR", "ADMIN", "FIRED"];
-const CONTRACT_TYPES = ["TEMPORARY", "PART_TIME", "FULL_TIME"];
-
-function readStorageValue(key) {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  const sessionValue = window.sessionStorage.getItem(key);
-  if (sessionValue) {
-    return sessionValue;
-  }
-
-  return window.localStorage.getItem(key) || "";
-}
-
-function readRememberSessionPreference() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  return window.localStorage.getItem(REMEMBER_SESSION_KEY) === "true";
-}
-
-function normalizePath(path) {
-  if (!path || !path.trim()) {
-    return "/";
-  }
-
-  const trimmed = path.trim();
-  if (trimmed.length > 1 && trimmed.endsWith("/")) {
-    return trimmed.slice(0, -1);
-  }
-
-  return trimmed;
-}
-
-function formatApiError(error) {
-  if (error instanceof ApiError) {
-    const payload = error.payload;
-    if (payload && typeof payload === "object") {
-      const description = payload.description;
-      if (typeof description === "string" && description.trim()) {
-        return description.trim();
-      }
-
-      const firstError = Array.isArray(payload.errors) ? payload.errors[0] : "";
-      if (typeof firstError === "string" && firstError.trim()) {
-        return firstError.trim();
-      }
-    }
-    return `Request failed (HTTP ${error.status}).`;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Unexpected error";
-}
-
-function formatEnumLabel(value) {
-  return value
-    .toLowerCase()
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function toFiniteNumber(value, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function toOptionalNumber(value) {
-  if (value === "" || value === null || value === undefined) {
-    return null;
-  }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function isAllowedContractStartDate(value) {
-  if (!value) {
-    return false;
-  }
-
-  const day = Number(value.split("-")[2]);
-  return day === 1 || day === 15;
-}
-
-function currentApiDateTime() {
-  return new Date().toISOString().slice(0, 19);
-}
-
-function validateCredentials(netId, password) {
-  const normalizedNetId = netId.trim();
-  if (!normalizedNetId) {
-    return "NetID is required.";
-  }
-
-  if (normalizedNetId.length > 20) {
-    return "NetID must be at most 20 characters.";
-  }
-
-  if (!password || password.trim().length < 8) {
-    return "Password must be at least 8 characters.";
-  }
-
-  if (password.length > 128) {
-    return "Password must be at most 128 characters.";
-  }
-
-  return "";
-}
-
-function isUuid(value) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value
-  );
-}
-
-async function resolveUserUuid(userRef, token) {
-  const trimmedRef = userRef.trim();
-  if (!trimmedRef) {
-    return "";
-  }
-
-  if (isUuid(trimmedRef)) {
-    return trimmedRef;
-  }
-
-  const response = await apiRequest(`/api/user/internal/user/getUserDto/${encodeURIComponent(trimmedRef)}`, {
-    method: "GET",
-    token
-  });
-
-  const resolvedUuid = response.data?.id;
-  if (!resolvedUuid || !isUuid(resolvedUuid)) {
-    throw new Error(`Could not resolve NetID '${trimmedRef}' to a valid user ID.`);
-  }
-
-  return resolvedUuid;
-}
-
-function decodeJwtPayload(token) {
-  if (!token || typeof window === "undefined" || typeof window.atob !== "function") {
-    return null;
-  }
-
-  const tokenParts = token.split(".");
-  if (tokenParts.length !== 3) {
-    return null;
-  }
-
-  try {
-    let payload = tokenParts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const missingPadding = payload.length % 4;
-    if (missingPadding) {
-      payload += "=".repeat(4 - missingPadding);
-    }
-    return JSON.parse(window.atob(payload));
-  } catch (_error) {
-    return null;
-  }
-}
-
-function getTokenExpirationMs(token) {
-  const payload = decodeJwtPayload(token);
-  const expiration = Number(payload?.exp);
-  if (!Number.isFinite(expiration) || expiration <= 0) {
-    return null;
-  }
-
-  return expiration * 1000;
-}
-
-function isTokenExpired(token) {
-  const expiration = getTokenExpirationMs(token);
-  if (!expiration) {
-    return false;
-  }
-
-  return Date.now() >= expiration;
-}
-
-function flattenClaimValue(value) {
-  if (Array.isArray(value)) {
-    return value.map(flattenClaimValue).join(" ");
-  }
-
-  if (value && typeof value === "object") {
-    return Object.values(value).map(flattenClaimValue).join(" ");
-  }
-
-  return String(value || "");
-}
-
-function extractRoleFromToken(token) {
-  const payload = decodeJwtPayload(token);
-  if (!payload) {
-    return "";
-  }
-
-  const roleText = flattenClaimValue(payload.role).toUpperCase();
-  if (roleText.includes("ADMIN")) {
-    return "ADMIN";
-  }
-
-  return "USER";
-}
-
-function hasRequiredRole(activeRole, minimumRole) {
-  const rank = { USER: 1, ADMIN: 2 };
-  const current = rank[activeRole] || 0;
-  const required = rank[minimumRole] || 0;
-  return current >= required;
-}
-
-function getDefaultPortalPath() {
-  return "/portal/me";
-}
-
-function findPortalRoute(path) {
-  return PORTAL_ROUTES.find((route) => route.path === path) || null;
-}
-
-function initialNetIdFromStorage() {
-  const storedNetId = readStorageValue(NETID_STORAGE_KEY);
-  if (storedNetId) {
-    return storedNetId;
-  }
-
-  const payload = decodeJwtPayload(readStorageValue(TOKEN_STORAGE_KEY));
-  return payload?.sub || "";
-}
+import { apiRequest } from "./api";
+import {
+  ATTACHMENTS_REQUEST_STORAGE_KEY,
+  NETID_STORAGE_KEY,
+  REMEMBER_SESSION_KEY,
+  TOKEN_STORAGE_KEY
+} from "./constants/app";
+import {
+  CONTRACT_TYPES,
+  PORTAL_ACTIONS,
+  PORTAL_ROUTES,
+  SIDEBAR_GROUPS,
+  USER_ROLES
+} from "./constants/portal";
+import AuthScreen from "./components/AuthScreen";
+import PageTopbar from "./components/PageTopbar";
+import PortalSidebar from "./components/PortalSidebar";
+import AdminPage from "./pages/AdminPage";
+import MePage from "./pages/MePage";
+import RequestsPage from "./pages/RequestsPage";
+import { persistSessionState, resolveSessionIdentity } from "./services/securityService";
+import {
+  createMultipartFilePayload,
+  triggerFileDownload,
+  validatePdfUpload
+} from "./services/uploadService";
+import { resolveUserUuid } from "./services/userService";
+import {
+  extractRoleFromToken,
+  hasRequiredRole,
+  initialNetIdFromStorage,
+  isUuid,
+  isTokenExpired,
+  validateCredentials
+} from "./utils/auth";
+import {
+  buildPortalActionFeedback,
+  buildRequestStats,
+  currentApiDateTime,
+  formatApiError,
+  formatEnumLabel,
+  formatFileSize,
+  getRequestGuidance,
+  isAllowedContractStartDate,
+  normalizeDateForInput,
+  sanitizeFileNameForDownload,
+  toFiniteNumber,
+  toLocaleDateTime,
+  toOptionalNumber
+} from "./utils/formatters";
+import { findPortalRoute, getDefaultPortalPath, normalizePath } from "./utils/navigation";
+import { buildTopbarSectionLinks } from "./utils/portalView";
+import { readRememberSessionPreference, readStorageValue } from "./utils/storage";
 
 export default function App() {
   const [authMode, setAuthMode] = useState("login");
@@ -323,7 +59,9 @@ export default function App() {
   const [loginForm, setLoginForm] = useState({ netId: "", password: "" });
   const [rememberSession, setRememberSession] = useState(readRememberSessionPreference);
   const [token, setToken] = useState(() => readStorageValue(TOKEN_STORAGE_KEY));
-  const [activeNetId, setActiveNetId] = useState(initialNetIdFromStorage);
+  const [activeNetId, setActiveNetId] = useState(() =>
+    initialNetIdFromStorage(TOKEN_STORAGE_KEY, NETID_STORAGE_KEY)
+  );
   const [activeRole, setActiveRole] = useState(() =>
     extractRoleFromToken(readStorageValue(TOKEN_STORAGE_KEY))
   );
@@ -336,6 +74,7 @@ export default function App() {
   const [authNotice, setAuthNotice] = useState(null);
   const [adminNotice, setAdminNotice] = useState(null);
   const [requestsNotice, setRequestsNotice] = useState(null);
+  const [activeSectionId, setActiveSectionId] = useState("");
   const [createUserRequestForm, setCreateUserRequestForm] = useState({
     contractId: "",
     requestBody: "",
@@ -356,7 +95,40 @@ export default function App() {
     requestId: "",
     responseBody: ""
   });
-  const [requestLookupForm, setRequestLookupForm] = useState({ requestId: "" });
+  const [documentUploadForm, setDocumentUploadForm] = useState({
+    requestId: "",
+    file: null
+  });
+  const [requestAttachmentList, setRequestAttachmentList] = useState([]);
+  const [attachmentsRequestId, setAttachmentsRequestId] = useState(() =>
+    readStorageValue(ATTACHMENTS_REQUEST_STORAGE_KEY)
+  );
+  const [isAttachmentsLoading, setIsAttachmentsLoading] = useState(false);
+  const [activeAttachmentId, setActiveAttachmentId] = useState("");
+  const [myRequestFilter, setMyRequestFilter] = useState("ALL");
+  const [myRequestSearch, setMyRequestSearch] = useState("");
+  const [requestLookupForm, setRequestLookupForm] = useState(() => ({
+    requestId: readStorageValue(ATTACHMENTS_REQUEST_STORAGE_KEY)
+  }));
+  const [requestEditForm, setRequestEditForm] = useState({
+    requestId: "",
+    contractId: "",
+    requestBody: "",
+    startDate: "",
+    numberOfDays: ""
+  });
+  const [myRequests, setMyRequests] = useState([]);
+  const [isMyRequestsLoading, setIsMyRequestsLoading] = useState(false);
+  const [profileData, setProfileData] = useState(null);
+  const [currentContractData, setCurrentContractData] = useState(null);
+  const [requestStats, setRequestStats] = useState({
+    total: 0,
+    open: 0,
+    approved: 0,
+    rejected: 0,
+    latest: null
+  });
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [approveRequestForm, setApproveRequestForm] = useState({ requestId: "" });
   const [rejectRequestForm, setRejectRequestForm] = useState({
     requestId: "",
@@ -474,10 +246,46 @@ export default function App() {
     [visibleRoutes]
   );
 
-  const activeRoute = useMemo(() => findPortalRoute(currentPath), [currentPath]);
+  const activeRoute = useMemo(() => findPortalRoute(currentPath, PORTAL_ROUTES), [currentPath]);
   const isMeRoute = activeRoute?.id === "me";
   const isRequestsRoute = activeRoute?.id === "requests";
   const isAdminRoute = activeRoute?.id === "admin";
+  const topbarSectionLinks = useMemo(
+    () => buildTopbarSectionLinks({ isMeRoute, isRequestsRoute, isAdminRoute, isAdmin }),
+    [isAdmin, isAdminRoute, isMeRoute, isRequestsRoute]
+  );
+
+  useEffect(() => {
+    const firstSection = topbarSectionLinks[0]?.id || "";
+    setActiveSectionId(firstSection);
+  }, [currentPath, topbarSectionLinks]);
+
+  const filteredMyRequests = useMemo(() => {
+    const search = myRequestSearch.trim().toLowerCase();
+    return myRequests.filter((requestItem) => {
+      const status = String(requestItem.requestStatus || "").toUpperCase();
+      const statusMatches = myRequestFilter === "ALL" || status === myRequestFilter;
+      if (!statusMatches) {
+        return false;
+      }
+
+      if (!search) {
+        return true;
+      }
+
+      const haystack = [
+        requestItem.id,
+        requestItem.contractId,
+        requestItem.requestBody,
+        requestItem.requestStatus
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(search);
+    });
+  }, [myRequests, myRequestFilter, myRequestSearch]);
 
   const navigate = (nextPath, replace = false) => {
     const normalizedPath = normalizePath(nextPath);
@@ -539,7 +347,7 @@ export default function App() {
       return;
     }
 
-    const route = findPortalRoute(normalizedPath);
+    const route = findPortalRoute(normalizedPath, PORTAL_ROUTES);
     if (!route) {
       navigate(defaultPortalPath, true);
       return;
@@ -560,37 +368,37 @@ export default function App() {
     );
   };
 
+  const saveAttachmentRequestId = (requestId) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const normalizedId = String(requestId || "").trim();
+    if (!normalizedId) {
+      window.localStorage.removeItem(ATTACHMENTS_REQUEST_STORAGE_KEY);
+      window.sessionStorage.removeItem(ATTACHMENTS_REQUEST_STORAGE_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(ATTACHMENTS_REQUEST_STORAGE_KEY, normalizedId);
+    window.sessionStorage.setItem(ATTACHMENTS_REQUEST_STORAGE_KEY, normalizedId);
+  };
+
   const saveSession = (nextToken, suggestedNetId = "", persistSession = rememberSession) => {
-    const payload = decodeJwtPayload(nextToken);
-    const resolvedNetId = suggestedNetId || payload?.sub || "";
-    const resolvedRole = extractRoleFromToken(nextToken);
+    const { resolvedNetId, resolvedRole } = resolveSessionIdentity(nextToken, suggestedNetId);
 
     setToken(nextToken);
     setActiveNetId(resolvedNetId);
     setActiveRole(resolvedRole);
 
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(REMEMBER_SESSION_KEY, String(Boolean(persistSession)));
-      if (nextToken) {
-        const persistentStorage = persistSession ? window.localStorage : window.sessionStorage;
-        const volatileStorage = persistSession ? window.sessionStorage : window.localStorage;
-        persistentStorage.setItem(TOKEN_STORAGE_KEY, nextToken);
-        volatileStorage.removeItem(TOKEN_STORAGE_KEY);
-      } else {
-        window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-        window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
-      }
-
-      if (resolvedNetId) {
-        const persistentStorage = persistSession ? window.localStorage : window.sessionStorage;
-        const volatileStorage = persistSession ? window.sessionStorage : window.localStorage;
-        persistentStorage.setItem(NETID_STORAGE_KEY, resolvedNetId);
-        volatileStorage.removeItem(NETID_STORAGE_KEY);
-      } else {
-        window.localStorage.removeItem(NETID_STORAGE_KEY);
-        window.sessionStorage.removeItem(NETID_STORAGE_KEY);
-      }
-    }
+    persistSessionState({
+      nextToken,
+      resolvedNetId,
+      persistSession,
+      tokenStorageKey: TOKEN_STORAGE_KEY,
+      netIdStorageKey: NETID_STORAGE_KEY,
+      rememberSessionKey: REMEMBER_SESSION_KEY
+    });
 
     return { netId: resolvedNetId, role: resolvedRole };
   };
@@ -599,6 +407,17 @@ export default function App() {
     saveSession("", "", rememberSession);
     setActionResults({});
     setRequestsNotice(null);
+    setRequestAttachmentList([]);
+    setAttachmentsRequestId("");
+    saveAttachmentRequestId("");
+    setDocumentUploadForm({ requestId: "", file: null });
+    setRequestEditForm({
+      requestId: "",
+      contractId: "",
+      requestBody: "",
+      startDate: "",
+      numberOfDays: ""
+    });
     setAuthNotice({
       type: "info",
       text: "You have been signed out."
@@ -632,6 +451,146 @@ export default function App() {
     const intervalId = window.setInterval(maybeExpireSession, 30_000);
     return () => window.clearInterval(intervalId);
   }, [token, rememberSession]);
+
+  useEffect(() => {
+    if (!token || !isRequestsRoute) {
+      return;
+    }
+
+    void loadMyRequests({ silent: true });
+  }, [token, isRequestsRoute]);
+
+  useEffect(() => {
+    if (!token || !isRequestsRoute || !attachmentsRequestId) {
+      return;
+    }
+
+    void loadRequestAttachments(attachmentsRequestId, { silent: true });
+  }, [token, isRequestsRoute]);
+
+  useEffect(() => {
+    const requestId = requestLookupForm.requestId.trim();
+    if (!requestId) {
+      return;
+    }
+
+    setDocumentResponseForm((previous) =>
+      previous.requestId === requestId ? previous : { ...previous, requestId }
+    );
+    setDocumentUploadForm((previous) =>
+      previous.requestId === requestId ? previous : { ...previous, requestId }
+    );
+    setRequestEditForm((previous) =>
+      previous.requestId === requestId ? previous : { ...previous, requestId }
+    );
+  }, [requestLookupForm.requestId]);
+
+  useEffect(() => {
+    if (!token || !isMeRoute || !activeNetId) {
+      return;
+    }
+
+    void loadPersonalDashboard({ silent: true });
+  }, [token, isMeRoute, activeNetId]);
+
+  const loadPersonalDashboard = async ({ silent = false } = {}) => {
+    if (!token || !activeNetId) {
+      return;
+    }
+
+    setIsProfileLoading(true);
+
+    try {
+      const profileResponse = await apiRequest(
+        `/api/user/internal/user/getUserDto/${encodeURIComponent(activeNetId)}`,
+        {
+          method: "GET",
+          token
+        }
+      );
+      const nextProfile = profileResponse.data || null;
+      setProfileData(nextProfile);
+
+      const resolvedUserId =
+        nextProfile?.id && isUuid(String(nextProfile.id))
+          ? String(nextProfile.id)
+          : await resolveUserUuid(activeNetId, token);
+
+      const [myRequestsResponse, currentContractResponse] = await Promise.all([
+        apiRequest("/api/request/internal/request/mine", {
+          method: "GET",
+          token
+        }),
+        apiRequest(`/api/contract/internal/contract/current/employee/${resolvedUserId}`, {
+          method: "GET",
+          token
+        })
+      ]);
+
+      const nextRequests = Array.isArray(myRequestsResponse.data) ? myRequestsResponse.data : [];
+      setMyRequests(nextRequests);
+      setRequestStats(buildRequestStats(nextRequests));
+      setCurrentContractData(currentContractResponse.status === 204 ? null : currentContractResponse.data);
+
+      if (!silent) {
+        pushActivity("Dashboard refreshed", "Loaded your profile, contract and request summary.", "success");
+      }
+    } catch (error) {
+      const message = formatApiError(error);
+      if (!silent) {
+        setRequestsNotice({
+          type: "error",
+          message
+        });
+      }
+      pushActivity("Dashboard refresh failed", message, "error");
+    } finally {
+      setIsProfileLoading(false);
+    }
+  };
+
+  const loadMyRequests = async ({ silent = false } = {}) => {
+    if (!token) {
+      return;
+    }
+
+    setIsMyRequestsLoading(true);
+    if (!silent) {
+      setRequestsNotice(null);
+    }
+
+    try {
+      const response = await apiRequest("/api/request/internal/request/mine", {
+        method: "GET",
+        token
+      });
+
+      const requests = Array.isArray(response.data) ? response.data : [];
+      setMyRequests(requests);
+      setRequestStats(buildRequestStats(requests));
+
+      if (!silent) {
+        setRequestsNotice({
+          type: "success",
+          message: requests.length === 0
+            ? "No requests found for your account yet."
+            : `Loaded ${requests.length} request${requests.length === 1 ? "" : "s"}.`
+        });
+        pushActivity("My requests loaded", `Fetched ${requests.length} request(s).`, "success");
+      }
+    } catch (error) {
+      const message = formatApiError(error);
+      if (!silent) {
+        setRequestsNotice({
+          type: "error",
+          message
+        });
+      }
+      pushActivity("My requests failed", message, "error");
+    } finally {
+      setIsMyRequestsLoading(false);
+    }
+  };
 
   const runTask = async (taskId, taskName, callback, options = {}) => {
     setActiveTaskId(taskId);
@@ -798,20 +757,21 @@ export default function App() {
         method: action.method,
         token: action.requiresToken ? token : undefined
       });
-
-      const statusMessage = `HTTP ${response.status}`;
+      const actionFeedback = buildPortalActionFeedback(action, response);
       setActionResults((previous) => ({
         ...previous,
         [action.id]: {
           status: "success",
-          message: statusMessage
+          message: actionFeedback.resultMessage,
+          details: actionFeedback.details || []
         }
       }));
       setRequestsNotice({
         type: "success",
-        message: `${action.label} completed successfully (${statusMessage}).`
+        message: actionFeedback.noticeMessage,
+        details: actionFeedback.details || []
       });
-      pushActivity(action.label, `Success (${response.status}).`, "success");
+      pushActivity(action.label, actionFeedback.activityDetail, "success");
     } catch (error) {
       const message = formatApiError(error);
       setActionResults((previous) => ({
@@ -1493,6 +1453,14 @@ export default function App() {
           if (requestId) {
             setRequestLookupForm({ requestId });
             setDocumentResponseForm((previous) => ({ ...previous, requestId }));
+            setDocumentUploadForm((previous) => ({ ...previous, requestId, file: null }));
+            setRequestEditForm({
+              requestId,
+              contractId: createUserRequestForm.contractId.trim(),
+              requestBody: createUserRequestForm.requestBody.trim(),
+              startDate: createUserRequestForm.startDate,
+              numberOfDays: createUserRequestForm.numberOfDays
+            });
           }
           setCreateUserRequestForm((previous) => ({
             ...previous,
@@ -1500,6 +1468,7 @@ export default function App() {
             startDate: "",
             numberOfDays: ""
           }));
+          void loadMyRequests({ silent: true });
         }
       }
     );
@@ -1586,7 +1555,109 @@ export default function App() {
           if (requestId) {
             setRequestLookupForm({ requestId });
             setDocumentResponseForm((previous) => ({ ...previous, requestId }));
+            setDocumentUploadForm((previous) => ({ ...previous, requestId, file: null }));
+            setRequestEditForm((previous) => ({
+              ...previous,
+              requestId
+            }));
           }
+          void loadMyRequests({ silent: true });
+        }
+      }
+    );
+  };
+
+  const loadCurrentUserContract = async () => {
+    const normalizedNetId = activeNetId.trim();
+    if (!normalizedNetId) {
+      setRequestsNotice({
+        type: "error",
+        message: "No active user in session. Please sign in again."
+      });
+      return;
+    }
+
+    await runTask(
+      "load-current-contract",
+      "Load my current contract",
+      async () => {
+        const employeeId = await resolveUserUuid(normalizedNetId, token);
+        return apiRequest(`/api/contract/internal/contract/current/employee/${employeeId}`, {
+          method: "GET",
+          token
+        });
+      },
+      {
+        successMessage: (response) => {
+          if (response.status === 204) {
+            return "No contract found for your profile yet. Ask HR/Admin to create one first.";
+          }
+          const contractId = response.data?.id;
+          if (contractId) {
+            return `Current contract loaded (${contractId}). Fields were auto-filled.`;
+          }
+          return `Current contract loaded successfully (HTTP ${response.status}).`;
+        },
+        successActivity: (response) => {
+          const contractId = response.data?.id;
+          if (contractId) {
+            return `Loaded contract ${contractId}.`;
+          }
+          return `Success (${response.status}).`;
+        },
+        onSuccess: (response) => {
+          if (response.status === 204) {
+            setCreateUserRequestForm((previous) => ({
+              ...previous,
+              contractId: ""
+            }));
+            setContractUpdateRequestForm((previous) => ({
+              ...previous,
+              contractId: "",
+              hoursPerWeek: "",
+              vacationDays: "",
+              salaryScalePoint: "",
+              jobPosition: "",
+              benefits: "",
+              startDate: "",
+              endDate: ""
+            }));
+            return;
+          }
+          const contract = response.data || {};
+          const terms = contract.contractTerms || {};
+          const contractId = contract.id ? String(contract.id) : "";
+          const benefitsText = Array.isArray(contract.benefits) ? contract.benefits.join(", ") : "";
+          const jobName =
+            typeof contract.jobPosition?.name === "string"
+              ? contract.jobPosition.name
+              : "";
+
+          setCreateUserRequestForm((previous) => ({
+            ...previous,
+            contractId
+          }));
+
+          setContractUpdateRequestForm((previous) => ({
+            ...previous,
+            contractId,
+            hoursPerWeek:
+              terms.hoursPerWeek === null || terms.hoursPerWeek === undefined
+                ? ""
+                : String(terms.hoursPerWeek),
+            vacationDays:
+              terms.vacationDays === null || terms.vacationDays === undefined
+                ? ""
+                : String(terms.vacationDays),
+            salaryScalePoint:
+              terms.salaryScalePoint === null || terms.salaryScalePoint === undefined
+                ? ""
+                : String(terms.salaryScalePoint),
+            jobPosition: jobName,
+            benefits: benefitsText,
+            startDate: normalizeDateForInput(terms.startDate),
+            endDate: normalizeDateForInput(terms.endDate)
+          }));
         }
       }
     );
@@ -1665,1515 +1736,470 @@ export default function App() {
     );
   };
 
+  const loadRequestAttachments = async (requestIdInput, { silent = false } = {}) => {
+    const requestId = String(requestIdInput || "").trim();
+    if (!requestId) {
+      if (!silent) {
+        setRequestsNotice({
+          type: "error",
+          message: "Enter a request number first to load attachments."
+        });
+      }
+      return;
+    }
+    if (!isUuid(requestId)) {
+      if (!silent) {
+        setRequestsNotice({
+          type: "error",
+          message: "Request number must be a valid UUID."
+        });
+      }
+      return;
+    }
+
+    setIsAttachmentsLoading(true);
+    try {
+      const response = await apiRequest(`/api/request/internal/request/${requestId}/attachments`, {
+        method: "GET",
+        token
+      });
+      const attachments = Array.isArray(response.data) ? response.data : [];
+      setAttachmentsRequestId(requestId);
+      saveAttachmentRequestId(requestId);
+      setRequestAttachmentList(attachments);
+      setRequestLookupForm((previous) =>
+        previous.requestId === requestId ? previous : { requestId }
+      );
+      setDocumentUploadForm((previous) =>
+        previous.requestId === requestId ? previous : { ...previous, requestId }
+      );
+      if (!silent) {
+        setRequestsNotice({
+          type: "success",
+          message:
+            attachments.length === 0
+              ? "No PDF attachments for this request yet."
+              : `Loaded ${attachments.length} attachment${attachments.length === 1 ? "" : "s"}.`
+        });
+      }
+    } catch (error) {
+      const message = formatApiError(error);
+      if (!silent) {
+        setRequestsNotice({
+          type: "error",
+          message
+        });
+        pushActivity("Load attachments failed", message, "error");
+      }
+    } finally {
+      setIsAttachmentsLoading(false);
+    }
+  };
+
+  const uploadRequestAttachment = async (event) => {
+    event.preventDefault();
+    const requestId = documentUploadForm.requestId.trim();
+    if (!requestId || !isUuid(requestId)) {
+      setRequestsNotice({
+        type: "error",
+        message: "Provide a valid request UUID before uploading."
+      });
+      return;
+    }
+
+    const fileValidationMessage = validatePdfUpload(documentUploadForm.file);
+    if (fileValidationMessage) {
+      setRequestsNotice({
+        type: "error",
+        message: fileValidationMessage
+      });
+      return;
+    }
+
+    const formData = createMultipartFilePayload(documentUploadForm.file);
+
+    await runTask(
+      "upload-request-attachment",
+      "Upload request document",
+      () =>
+        apiRequest(`/api/request/internal/request/${requestId}/attachments`, {
+          method: "POST",
+          rawBody: formData,
+          token
+        }),
+      {
+        successMessage: (response) => {
+          const name = response.data?.fileName;
+          return name
+            ? `Uploaded ${name} successfully.`
+            : `Attachment uploaded successfully (HTTP ${response.status}).`;
+        },
+        onSuccess: () => {
+          setDocumentUploadForm((previous) => ({
+            ...previous,
+            file: null
+          }));
+          void loadRequestAttachments(requestId, { silent: true });
+        }
+      }
+    );
+  };
+
+  const downloadRequestAttachment = async (attachment) => {
+    const attachmentId = attachment?.id;
+    if (!attachmentId) {
+      return;
+    }
+
+    setActiveAttachmentId(attachmentId);
+    try {
+      const response = await apiRequest(`/api/request/internal/request/attachments/${attachmentId}`, {
+        method: "GET",
+        token,
+        headers: { Accept: "application/pdf" },
+        responseType: "blob"
+      });
+
+      const blob = response.data;
+      const fileName = sanitizeFileNameForDownload(attachment.fileName, `request-${attachment.requestId}.pdf`);
+      triggerFileDownload(blob, fileName);
+    } catch (error) {
+      const message = formatApiError(error);
+      setRequestsNotice({
+        type: "error",
+        message
+      });
+      pushActivity("Download attachment failed", message, "error");
+    } finally {
+      setActiveAttachmentId("");
+    }
+  };
+
+  const deleteRequestAttachment = async (attachmentId) => {
+    if (!attachmentId) {
+      return;
+    }
+
+    await runTask(
+      `delete-request-attachment-${attachmentId}`,
+      "Delete attachment",
+      () =>
+        apiRequest(`/api/request/internal/request/attachments/${attachmentId}`, {
+          method: "DELETE",
+          token
+        }),
+      {
+        onSuccess: () => {
+          if (attachmentsRequestId) {
+            void loadRequestAttachments(attachmentsRequestId, { silent: true });
+          }
+        }
+      }
+    );
+  };
+
+  const updateOwnRequest = async (event) => {
+    event.preventDefault();
+    const requestId = requestEditForm.requestId.trim();
+    if (!requestId || !isUuid(requestId)) {
+      setRequestsNotice({
+        type: "error",
+        message: "Provide a valid request UUID before updating."
+      });
+      return;
+    }
+
+    const payload = {};
+    if (requestEditForm.requestBody.trim()) {
+      payload.requestBody = requestEditForm.requestBody.trim();
+    }
+    if (requestEditForm.contractId.trim()) {
+      if (!isUuid(requestEditForm.contractId.trim())) {
+        setRequestsNotice({
+          type: "error",
+          message: "Contract ID must be a valid UUID."
+        });
+        return;
+      }
+      payload.contractId = requestEditForm.contractId.trim();
+    }
+    if (requestEditForm.startDate) {
+      payload.startDate = `${requestEditForm.startDate}T09:00:00`;
+    }
+    if (requestEditForm.numberOfDays !== "") {
+      const parsed = Number(requestEditForm.numberOfDays);
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        setRequestsNotice({
+          type: "error",
+          message: "Number of days must be a whole number >= 0."
+        });
+        return;
+      }
+      payload.numberOfDays = parsed;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      setRequestsNotice({
+        type: "error",
+        message: "Provide at least one field to update."
+      });
+      return;
+    }
+
+    await runTask(
+      "update-own-request",
+      "Update my request",
+      () =>
+        apiRequest(`/api/request/internal/request/${requestId}`, {
+          method: "PUT",
+          body: payload,
+          token
+        }),
+      {
+        onSuccess: () => {
+          void loadMyRequests({ silent: true });
+        }
+      }
+    );
+  };
+
+  const cancelOwnRequest = async (requestIdInput) => {
+    const requestId = String(requestIdInput || "").trim();
+    if (!requestId || !isUuid(requestId)) {
+      setRequestsNotice({
+        type: "error",
+        message: "Provide a valid request UUID before cancelling."
+      });
+      return;
+    }
+
+    await runTask(
+      "cancel-own-request",
+      "Cancel my request",
+      () =>
+        apiRequest(`/api/request/internal/request/${requestId}`, {
+          method: "DELETE",
+          token
+        }),
+      {
+        onSuccess: () => {
+          void loadMyRequests({ silent: true });
+          setRequestAttachmentList([]);
+          setAttachmentsRequestId("");
+        }
+      }
+    );
+  };
+
+  const openRequestWorkspaceContext = (requestItem) => {
+    const requestId = String(requestItem?.id || "");
+    if (!requestId) {
+      return;
+    }
+
+    setRequestLookupForm({ requestId });
+    setDocumentResponseForm((previous) => ({ ...previous, requestId }));
+    setDocumentUploadForm((previous) => ({ ...previous, requestId, file: null }));
+    setRequestEditForm({
+      requestId,
+      contractId: requestItem?.contractId ? String(requestItem.contractId) : "",
+      requestBody: requestItem?.requestBody || "",
+      startDate: normalizeDateForInput(requestItem?.startDate),
+      numberOfDays:
+        requestItem?.numberOfDays === null || requestItem?.numberOfDays === undefined
+          ? ""
+          : String(requestItem.numberOfDays)
+    });
+
+    void loadRequestAttachments(requestId, { silent: true });
+  };
+
   if (!token) {
     return (
-      <main className="auth-layout">
-        <section className="auth-hero">
-          <p className="brand-kicker">HR MANAGEMENT SUITE</p>
-          <h1>Sign in first, then continue to your portal</h1>
-          <p>
-            This app now has dedicated portal routes for users and admins, with a role-aware sidebar navigation.
-          </p>
-          <ul className="auth-points">
-            <li>Route flow: /login to /portal/me</li>
-            <li>Role-based sections and action visibility</li>
-            <li>Dedicated admin center for HR operations</li>
-          </ul>
-          <p className="auth-note">
-            Bootstrap admin: <code>ADMIN</code> with password from
-            <code> BOOTSTRAP_ADMIN_PASSWORD</code>.
-          </p>
-        </section>
-
-        <section className="auth-card">
-          <div className="auth-switch">
-            <button
-              type="button"
-              className={authMode === "login" ? "active" : ""}
-              onClick={() => setAuthMode("login")}
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              className={authMode === "register" ? "active" : ""}
-              onClick={() => setAuthMode("register")}
-            >
-              Register
-            </button>
-          </div>
-
-          {authMode === "login" ? (
-            <form className="stack" onSubmit={login}>
-              <label>
-                NetID
-                <input
-                  value={loginForm.netId}
-                  onChange={(event) =>
-                    setLoginForm((previous) => ({ ...previous, netId: event.target.value }))
-                  }
-                  placeholder="e.g. ADMIN"
-                  required
-                />
-              </label>
-
-              <label>
-                Password
-                <input
-                  type="password"
-                  value={loginForm.password}
-                  onChange={(event) =>
-                    setLoginForm((previous) => ({ ...previous, password: event.target.value }))
-                  }
-                  placeholder="your password"
-                  required
-                />
-              </label>
-
-              <label className="checkbox-line">
-                <input
-                  type="checkbox"
-                  checked={rememberSession}
-                  onChange={(event) => setRememberSession(event.target.checked)}
-                />
-                Keep me signed in on this device
-              </label>
-
-              <button type="submit" disabled={isLoginLoading}>
-                {isLoginLoading ? "Signing in..." : "Enter portal"}
-              </button>
-            </form>
-          ) : (
-            <form className="stack" onSubmit={registerFromAuth}>
-              <label>
-                NetID
-                <input
-                  value={registerForm.netId}
-                  onChange={(event) =>
-                    setRegisterForm((previous) => ({ ...previous, netId: event.target.value }))
-                  }
-                  placeholder="e.g. jane"
-                  required
-                />
-              </label>
-
-              <label>
-                Password
-                <input
-                  type="password"
-                  value={registerForm.password}
-                  onChange={(event) =>
-                    setRegisterForm((previous) => ({ ...previous, password: event.target.value }))
-                  }
-                  placeholder="create password"
-                  required
-                />
-              </label>
-
-              <button type="submit" disabled={isRegisterLoading}>
-                {isRegisterLoading ? "Creating..." : "Create account"}
-              </button>
-            </form>
-          )}
-
-          {authNotice && <p className={`notice ${authNotice.type}`}>{authNotice.text}</p>}
-        </section>
-      </main>
+      <AuthScreen
+        authMode={authMode}
+        setAuthMode={setAuthMode}
+        loginForm={loginForm}
+        setLoginForm={setLoginForm}
+        registerForm={registerForm}
+        setRegisterForm={setRegisterForm}
+        rememberSession={rememberSession}
+        setRememberSession={setRememberSession}
+        isLoginLoading={isLoginLoading}
+        isRegisterLoading={isRegisterLoading}
+        login={login}
+        registerFromAuth={registerFromAuth}
+        authNotice={authNotice}
+      />
     );
   }
 
   return (
     <main className="portal-layout">
-      <aside className="portal-sidebar">
-        <div>
-          <p className="brand-kicker">HR MANAGEMENT SUITE</p>
-          <h2 className="brand-title">User Portal</h2>
-        </div>
-
-        <div className="sidebar-session">
-          <p className="session-name">{activeNetId || "Unknown user"}</p>
-          <p className={`role-badge ${isAdmin ? "admin" : "user"}`}>
-            {isAdmin ? "ADMIN" : "USER"}
-          </p>
-        </div>
-
-        <nav className="nav-stack">
-          {sidebarGroups.map((group) => (
-            <div key={group.id} className="nav-group">
-              <p className="nav-group-title">{group.label}</p>
-              {group.items.map((route) => (
-                <button
-                  key={route.path}
-                  type="button"
-                  className={currentPath === route.path ? "nav-button active" : "nav-button"}
-                  onClick={() => navigate(route.path)}
-                >
-                  {route.label}
-                </button>
-              ))}
-            </div>
-          ))}
-        </nav>
-
-        <button type="button" className="ghost signout" onClick={clearSession}>
-          Sign out
-        </button>
-      </aside>
+      <PortalSidebar
+        activeNetId={activeNetId}
+        isAdmin={isAdmin}
+        sidebarGroups={sidebarGroups}
+        currentPath={currentPath}
+        navigate={navigate}
+        clearSession={clearSession}
+      />
 
       <section className="portal-main">
-        <header className="portal-header">
-          <p className="route-kicker">{activeRoute?.path || "/portal/me"}</p>
-          <h1>{activeRoute?.title || "Portal"}</h1>
-          <p>{activeRoute?.description || "Role-aware workspace for HR operations."}</p>
-        </header>
+        <PageTopbar
+          activeRoute={activeRoute}
+          sectionLinks={topbarSectionLinks}
+          activeSectionId={activeSectionId}
+          onSelectSection={setActiveSectionId}
+        />
 
         {isMeRoute && (
-          <section className="portal-grid single-panel">
-            <article className="panel">
-              <h2>Quick actions</h2>
-              <p className="helper-text">
-                Fast checks for regular user flows.
-              </p>
-              <div className="action-grid">
-                {userActions.map((action) => {
-                  const result = actionResults[action.id];
-                  return (
-                    <div key={action.id} className="action-item">
-                      <button
-                        type="button"
-                        onClick={() => runPortalAction(action)}
-                        disabled={activeActionId === action.id}
-                      >
-                        {activeActionId === action.id ? "Running..." : action.label}
-                      </button>
-                      {result && (
-                        <>
-                          <p className={`mini-status ${result.status || "info"}`}>
-                            {result.message}
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </article>
-          </section>
+          <MePage
+            profileData={profileData}
+            activeNetId={activeNetId}
+            isAdmin={isAdmin}
+            currentContractData={currentContractData}
+            requestStats={requestStats}
+            isProfileLoading={isProfileLoading}
+            formatEnumLabel={formatEnumLabel}
+            toLocaleDateTime={toLocaleDateTime}
+            loadPersonalDashboard={loadPersonalDashboard}
+            navigate={navigate}
+            activeSectionId={activeSectionId}
+          />
         )}
 
         {isRequestsRoute && (
-          <section className="panel workspace">
-            <h2>{isAdmin ? "Admin Requests Console" : "Requests Console"}</h2>
-            <p className="helper-text">
-              {isAdmin
-                ? "Run operational HR actions directly from buttons and forms."
-                : "Use these guided actions to interact with the HR backend."}
-            </p>
-
-            <div className="workflow-grid">
-              <article className="workflow-card">
-                <h3>My checks</h3>
-                <p className="helper-text">
-                  Quick actions for your own employee flow.
-                </p>
-                <div className="stack">
-                  <button
-                    type="button"
-                    onClick={() => runPortalAction(PORTAL_ACTIONS[0])}
-                    disabled={activeActionId === PORTAL_ACTIONS[0].id}
-                  >
-                    {activeActionId === PORTAL_ACTIONS[0].id
-                      ? "Checking..."
-                      : "Check contract service"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => runPortalAction(PORTAL_ACTIONS[1])}
-                    disabled={activeActionId === PORTAL_ACTIONS[1].id}
-                  >
-                    {activeActionId === PORTAL_ACTIONS[1].id
-                      ? "Checking..."
-                      : "Check request service"}
-                  </button>
-                </div>
-              </article>
-
-              {isAdmin && (
-                <article className="workflow-card">
-                  <h3>HR admin checks</h3>
-                  <p className="helper-text">
-                    Internal actions available only to administrators.
-                  </p>
-                  <div className="stack">
-                    <button
-                      type="button"
-                      onClick={() => runPortalAction(PORTAL_ACTIONS[2])}
-                      disabled={activeActionId === PORTAL_ACTIONS[2].id}
-                    >
-                      {activeActionId === PORTAL_ACTIONS[2].id
-                        ? "Loading..."
-                        : "List all user NetIDs"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => runPortalAction(PORTAL_ACTIONS[3])}
-                      disabled={activeActionId === PORTAL_ACTIONS[3].id}
-                    >
-                      {activeActionId === PORTAL_ACTIONS[3].id
-                        ? "Loading..."
-                        : "View open requests"}
-                    </button>
-                  </div>
-                </article>
-              )}
-            </div>
-
-            <section className="task-modules">
-              <h3>Employee task modules</h3>
-              <p className="helper-text">
-                Submit, update, and track your own requests using guided forms.
-              </p>
-
-              <div className="task-grid">
-                <article className="task-card">
-                  <h4>Submit HR request</h4>
-                  <form className="stack" onSubmit={submitUserRequest}>
-                    <label>
-                      Contract ID (optional)
-                      <input
-                        value={createUserRequestForm.contractId}
-                        onChange={(event) =>
-                          setCreateUserRequestForm((previous) => ({
-                            ...previous,
-                            contractId: event.target.value
-                          }))
-                        }
-                        placeholder="UUID if this request is contract-related"
-                      />
-                    </label>
-                    <label>
-                      Request details
-                      <textarea
-                        className="compact-textarea"
-                        rows={4}
-                        value={createUserRequestForm.requestBody}
-                        onChange={(event) =>
-                          setCreateUserRequestForm((previous) => ({
-                            ...previous,
-                            requestBody: event.target.value
-                          }))
-                        }
-                        placeholder="Describe what you need from HR"
-                        required
-                      />
-                    </label>
-                    <div className="form-two-col">
-                      <label>
-                        Requested start date (optional)
-                        <input
-                          type="date"
-                          value={createUserRequestForm.startDate}
-                          onChange={(event) =>
-                            setCreateUserRequestForm((previous) => ({
-                              ...previous,
-                              startDate: event.target.value
-                            }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        Number of days (optional)
-                        <input
-                          type="number"
-                          min="1"
-                          value={createUserRequestForm.numberOfDays}
-                          onChange={(event) =>
-                            setCreateUserRequestForm((previous) => ({
-                              ...previous,
-                              numberOfDays: event.target.value
-                            }))
-                          }
-                        />
-                      </label>
-                    </div>
-                    <button type="submit" disabled={activeTaskId === "submit-user-request"}>
-                      {activeTaskId === "submit-user-request"
-                        ? "Submitting..."
-                        : "Submit HR request"}
-                    </button>
-                  </form>
-                </article>
-
-                <article className="task-card">
-                  <h4>Request contract update</h4>
-                  <form className="stack" onSubmit={requestContractUpdate}>
-                    <label>
-                      Contract ID
-                      <input
-                        value={contractUpdateRequestForm.contractId}
-                        onChange={(event) =>
-                          setContractUpdateRequestForm((previous) => ({
-                            ...previous,
-                            contractId: event.target.value
-                          }))
-                        }
-                        placeholder="Contract UUID"
-                        required
-                      />
-                    </label>
-                    <div className="form-two-col">
-                      <label>
-                        Hours/week (optional)
-                        <input
-                          type="number"
-                          min="8"
-                          max="40"
-                          value={contractUpdateRequestForm.hoursPerWeek}
-                          onChange={(event) =>
-                            setContractUpdateRequestForm((previous) => ({
-                              ...previous,
-                              hoursPerWeek: event.target.value
-                            }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        Vacation days (optional)
-                        <input
-                          type="number"
-                          min="15"
-                          max="30"
-                          value={contractUpdateRequestForm.vacationDays}
-                          onChange={(event) =>
-                            setContractUpdateRequestForm((previous) => ({
-                              ...previous,
-                              vacationDays: event.target.value
-                            }))
-                          }
-                        />
-                      </label>
-                    </div>
-                    <div className="form-two-col">
-                      <label>
-                        Salary scale point (optional)
-                        <input
-                          type="number"
-                          min="0"
-                          max="1"
-                          step="0.1"
-                          value={contractUpdateRequestForm.salaryScalePoint}
-                          onChange={(event) =>
-                            setContractUpdateRequestForm((previous) => ({
-                              ...previous,
-                              salaryScalePoint: event.target.value
-                            }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        Job position (optional)
-                        <input
-                          value={contractUpdateRequestForm.jobPosition}
-                          onChange={(event) =>
-                            setContractUpdateRequestForm((previous) => ({
-                              ...previous,
-                              jobPosition: event.target.value
-                            }))
-                          }
-                        />
-                      </label>
-                    </div>
-                    <div className="form-two-col">
-                      <label>
-                        New start date (optional)
-                        <input
-                          type="date"
-                          value={contractUpdateRequestForm.startDate}
-                          onChange={(event) =>
-                            setContractUpdateRequestForm((previous) => ({
-                              ...previous,
-                              startDate: event.target.value
-                            }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        New end date (optional)
-                        <input
-                          type="date"
-                          value={contractUpdateRequestForm.endDate}
-                          onChange={(event) =>
-                            setContractUpdateRequestForm((previous) => ({
-                              ...previous,
-                              endDate: event.target.value
-                            }))
-                          }
-                        />
-                      </label>
-                    </div>
-                    <label>
-                      Benefits update (optional, comma separated)
-                      <input
-                        value={contractUpdateRequestForm.benefits}
-                        onChange={(event) =>
-                          setContractUpdateRequestForm((previous) => ({
-                            ...previous,
-                            benefits: event.target.value
-                          }))
-                        }
-                        placeholder="Meal vouchers, Transport"
-                      />
-                    </label>
-                    <button type="submit" disabled={activeTaskId === "contract-update-request"}>
-                      {activeTaskId === "contract-update-request"
-                        ? "Submitting..."
-                        : "Request contract update"}
-                    </button>
-                  </form>
-                </article>
-
-                <article className="task-card">
-                  <h4>Track request status</h4>
-                  <form className="stack" onSubmit={checkRequestStatus}>
-                    <label>
-                      Request number
-                      <input
-                        value={requestLookupForm.requestId}
-                        onChange={(event) =>
-                          setRequestLookupForm({ requestId: event.target.value })
-                        }
-                        placeholder="Paste your request UUID"
-                        required
-                      />
-                    </label>
-                    <button type="submit" disabled={activeTaskId === "request-status"}>
-                      {activeTaskId === "request-status"
-                        ? "Checking..."
-                        : "Check request status"}
-                    </button>
-                  </form>
-                </article>
-
-                <article className="task-card">
-                  <h4>Submit requested document</h4>
-                  <form className="stack" onSubmit={respondToDocumentRequest}>
-                    <label>
-                      Request number
-                      <input
-                        value={documentResponseForm.requestId}
-                        onChange={(event) =>
-                          setDocumentResponseForm((previous) => ({
-                            ...previous,
-                            requestId: event.target.value
-                          }))
-                        }
-                        placeholder="UUID from HR request"
-                        required
-                      />
-                    </label>
-                    <label>
-                      Your response
-                      <textarea
-                        className="compact-textarea"
-                        rows={4}
-                        value={documentResponseForm.responseBody}
-                        onChange={(event) =>
-                          setDocumentResponseForm((previous) => ({
-                            ...previous,
-                            responseBody: event.target.value
-                          }))
-                        }
-                        placeholder="Add document details or upload reference"
-                        required
-                      />
-                    </label>
-                    <button type="submit" disabled={activeTaskId === "document-response"}>
-                      {activeTaskId === "document-response"
-                        ? "Sending..."
-                        : "Send document response"}
-                    </button>
-                  </form>
-                </article>
-              </div>
-            </section>
-
-            <div className="response-area friendly">
-              <h3>Action status</h3>
-              {!requestsNotice && (
-                <p className="helper-text">Choose an action to run.</p>
-              )}
-              {requestsNotice && (
-                <p
-                  className={`mini-status ${
-                    requestsNotice.type === "success" ? "success" : "error"
-                  }`}
-                >
-                  {requestsNotice.message}
-                </p>
-              )}
-            </div>
-
-            {isAdmin && (
-              <section className="task-modules">
-                <h3>HR task modules</h3>
-                <p className="helper-text">
-                  Complete business forms instead of calling raw technical endpoints.
-                </p>
-
-                <div className="task-grid">
-                  <article className="task-card">
-                    <h4>Approve employee request</h4>
-                    <form className="stack" onSubmit={approveRequest}>
-                      <label>
-                        Request number
-                        <input
-                          value={approveRequestForm.requestId}
-                          onChange={(event) =>
-                            setApproveRequestForm({ requestId: event.target.value })
-                          }
-                          placeholder="Paste the request UUID"
-                          required
-                        />
-                      </label>
-                      <button type="submit" disabled={activeTaskId === "approve-request"}>
-                        {activeTaskId === "approve-request"
-                          ? "Approving..."
-                          : "Approve employee request"}
-                      </button>
-                    </form>
-                  </article>
-
-                  <article className="task-card">
-                    <h4>Create employment contract</h4>
-                    <form className="stack" onSubmit={createContract}>
-                      <label>
-                        Employee (NetID or UUID)
-                        <input
-                          value={createContractForm.employeeId}
-                          onChange={(event) =>
-                            setCreateContractForm((prev) => ({
-                              ...prev,
-                              employeeId: event.target.value
-                            }))
-                          }
-                          placeholder="e.g. ioan or user UUID"
-                          required
-                        />
-                      </label>
-                      <label>
-                        Employer (NetID or UUID)
-                        <input
-                          value={createContractForm.employerId}
-                          onChange={(event) =>
-                            setCreateContractForm((prev) => ({
-                              ...prev,
-                              employerId: event.target.value
-                            }))
-                          }
-                          placeholder="e.g. ADMIN or employer UUID"
-                          required
-                        />
-                      </label>
-                      <div className="form-two-col">
-                        <label>
-                          Contract type
-                          <select
-                            value={createContractForm.contractType}
-                            onChange={(event) =>
-                              setCreateContractForm((prev) => ({
-                                ...prev,
-                                contractType: event.target.value
-                              }))
-                            }
-                          >
-                            {CONTRACT_TYPES.map((type) => (
-                              <option key={type} value={type}>
-                                {formatEnumLabel(type)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          Hours/week
-                          <input
-                            type="number"
-                            min="8"
-                            max="40"
-                            value={createContractForm.hoursPerWeek}
-                            onChange={(event) =>
-                              setCreateContractForm((prev) => ({
-                                ...prev,
-                                hoursPerWeek: event.target.value
-                              }))
-                            }
-                            required
-                          />
-                        </label>
-                      </div>
-                      <div className="form-two-col">
-                        <label>
-                          Vacation days
-                          <input
-                            type="number"
-                            min="15"
-                            max="30"
-                            value={createContractForm.vacationDays}
-                            onChange={(event) =>
-                              setCreateContractForm((prev) => ({
-                                ...prev,
-                                vacationDays: event.target.value
-                              }))
-                            }
-                            required
-                          />
-                        </label>
-                        <label>
-                          Salary scale point
-                          <input
-                            type="number"
-                            min="0"
-                            max="1"
-                            step="0.1"
-                            value={createContractForm.salaryScalePoint}
-                            onChange={(event) =>
-                              setCreateContractForm((prev) => ({
-                                ...prev,
-                                salaryScalePoint: event.target.value
-                              }))
-                            }
-                            required
-                          />
-                        </label>
-                      </div>
-                      <div className="form-two-col">
-                        <label>
-                          Start date
-                          <input
-                            type="date"
-                            value={createContractForm.startDate}
-                            onChange={(event) =>
-                              setCreateContractForm((prev) => ({
-                                ...prev,
-                                startDate: event.target.value
-                              }))
-                            }
-                            required
-                          />
-                        </label>
-                        <label>
-                          End date (optional)
-                          <input
-                            type="date"
-                            value={createContractForm.endDate}
-                            onChange={(event) =>
-                              setCreateContractForm((prev) => ({
-                                ...prev,
-                                endDate: event.target.value
-                              }))
-                            }
-                          />
-                        </label>
-                      </div>
-                      <label>
-                        Job position
-                        <input
-                          value={createContractForm.jobPosition}
-                          onChange={(event) =>
-                            setCreateContractForm((prev) => ({
-                              ...prev,
-                              jobPosition: event.target.value
-                            }))
-                          }
-                          required
-                        />
-                      </label>
-                      <div className="form-three-col">
-                        <label>
-                          Min pay
-                          <input
-                            type="number"
-                            min="0"
-                            value={createContractForm.minimumPay}
-                            onChange={(event) =>
-                              setCreateContractForm((prev) => ({
-                                ...prev,
-                                minimumPay: event.target.value
-                              }))
-                            }
-                            required
-                          />
-                        </label>
-                        <label>
-                          Max pay
-                          <input
-                            type="number"
-                            min="0"
-                            value={createContractForm.maximumPay}
-                            onChange={(event) =>
-                              setCreateContractForm((prev) => ({
-                                ...prev,
-                                maximumPay: event.target.value
-                              }))
-                            }
-                            required
-                          />
-                        </label>
-                        <label>
-                          Scale step
-                          <input
-                            type="number"
-                            min="0"
-                            max="1"
-                            step="0.1"
-                            value={createContractForm.salaryStep}
-                            onChange={(event) =>
-                              setCreateContractForm((prev) => ({
-                                ...prev,
-                                salaryStep: event.target.value
-                              }))
-                            }
-                            required
-                          />
-                        </label>
-                      </div>
-                      <label>
-                        Pension scheme
-                        <input
-                          value={createContractForm.pensionScheme}
-                          onChange={(event) =>
-                            setCreateContractForm((prev) => ({
-                              ...prev,
-                              pensionScheme: event.target.value
-                            }))
-                          }
-                          required
-                        />
-                      </label>
-                      <label>
-                        Benefits (comma separated)
-                        <input
-                          value={createContractForm.benefits}
-                          onChange={(event) =>
-                            setCreateContractForm((prev) => ({
-                              ...prev,
-                              benefits: event.target.value
-                            }))
-                          }
-                        />
-                      </label>
-                      <button type="submit" disabled={activeTaskId === "create-contract"}>
-                        {activeTaskId === "create-contract"
-                          ? "Creating..."
-                          : "Create employment contract"}
-                      </button>
-                    </form>
-                  </article>
-
-                  <article className="task-card">
-                    <h4>Update employee profile</h4>
-                    <form className="stack" onSubmit={updateUserProfile}>
-                      <label>
-                        Employee NetID
-                        <input
-                          value={updateProfileForm.netId}
-                          onChange={(event) =>
-                            setUpdateProfileForm((prev) => ({
-                              ...prev,
-                              netId: event.target.value
-                            }))
-                          }
-                          required
-                        />
-                      </label>
-                      <label>
-                        Role
-                        <select
-                          value={updateProfileForm.role}
-                          onChange={(event) =>
-                            setUpdateProfileForm((prev) => ({
-                              ...prev,
-                              role: event.target.value
-                            }))
-                          }
-                        >
-                          {USER_ROLES.map((role) => (
-                            <option key={role} value={role}>
-                              {formatEnumLabel(role)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="form-two-col">
-                        <label>
-                          First name
-                          <input
-                            value={updateProfileForm.firstName}
-                            onChange={(event) =>
-                              setUpdateProfileForm((prev) => ({
-                                ...prev,
-                                firstName: event.target.value
-                              }))
-                            }
-                          />
-                        </label>
-                        <label>
-                          Last name
-                          <input
-                            value={updateProfileForm.lastName}
-                            onChange={(event) =>
-                              setUpdateProfileForm((prev) => ({
-                                ...prev,
-                                lastName: event.target.value
-                              }))
-                            }
-                          />
-                        </label>
-                      </div>
-                      <div className="form-two-col">
-                        <label>
-                          Email
-                          <input
-                            type="email"
-                            value={updateProfileForm.email}
-                            onChange={(event) =>
-                              setUpdateProfileForm((prev) => ({
-                                ...prev,
-                                email: event.target.value
-                              }))
-                            }
-                          />
-                        </label>
-                        <label>
-                          Phone number
-                          <input
-                            value={updateProfileForm.phoneNumber}
-                            onChange={(event) =>
-                              setUpdateProfileForm((prev) => ({
-                                ...prev,
-                                phoneNumber: event.target.value
-                              }))
-                            }
-                          />
-                        </label>
-                      </div>
-                      <label>
-                        Address
-                        <input
-                          value={updateProfileForm.address}
-                          onChange={(event) =>
-                            setUpdateProfileForm((prev) => ({
-                              ...prev,
-                              address: event.target.value
-                            }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        Description
-                        <input
-                          value={updateProfileForm.description}
-                          onChange={(event) =>
-                            setUpdateProfileForm((prev) => ({
-                              ...prev,
-                              description: event.target.value
-                            }))
-                          }
-                        />
-                      </label>
-                      <button type="submit" disabled={activeTaskId === "update-profile"}>
-                        {activeTaskId === "update-profile"
-                          ? "Updating..."
-                          : "Update employee profile"}
-                      </button>
-                    </form>
-                  </article>
-
-                  <article className="task-card">
-                    <h4>Reject employee request</h4>
-                    <form className="stack" onSubmit={rejectRequest}>
-                      <label>
-                        Request number
-                        <input
-                          value={rejectRequestForm.requestId}
-                          onChange={(event) =>
-                            setRejectRequestForm((previous) => ({
-                              ...previous,
-                              requestId: event.target.value
-                            }))
-                          }
-                          placeholder="Request UUID"
-                          required
-                        />
-                      </label>
-                      <label>
-                        Rejection reason
-                        <textarea
-                          className="compact-textarea"
-                          rows={3}
-                          value={rejectRequestForm.reason}
-                          onChange={(event) =>
-                            setRejectRequestForm((previous) => ({
-                              ...previous,
-                              reason: event.target.value
-                            }))
-                          }
-                          placeholder="Explain why the request is rejected"
-                        />
-                      </label>
-                      <button type="submit" disabled={activeTaskId === "reject-request"}>
-                        {activeTaskId === "reject-request"
-                          ? "Rejecting..."
-                          : "Reject employee request"}
-                      </button>
-                    </form>
-                  </article>
-
-                  <article className="task-card">
-                    <h4>Request employee document</h4>
-                    <form className="stack" onSubmit={requestEmployeeDocument}>
-                      <label>
-                        Employee (NetID or UUID)
-                        <input
-                          value={documentRequestForm.employeeRef}
-                          onChange={(event) =>
-                            setDocumentRequestForm((previous) => ({
-                              ...previous,
-                              employeeRef: event.target.value
-                            }))
-                          }
-                          placeholder="e.g. ioan or employee UUID"
-                          required
-                        />
-                      </label>
-                      <label>
-                        Document details
-                        <textarea
-                          className="compact-textarea"
-                          rows={3}
-                          value={documentRequestForm.requestBody}
-                          onChange={(event) =>
-                            setDocumentRequestForm((previous) => ({
-                              ...previous,
-                              requestBody: event.target.value
-                            }))
-                          }
-                          placeholder="What document should the employee provide?"
-                          required
-                        />
-                      </label>
-                      <button type="submit" disabled={activeTaskId === "request-document"}>
-                        {activeTaskId === "request-document"
-                          ? "Sending..."
-                          : "Request employee document"}
-                      </button>
-                    </form>
-                  </article>
-
-                  <article className="task-card">
-                    <h4>Terminate contract</h4>
-                    <form className="stack" onSubmit={terminateContract}>
-                      <label>
-                        Contract ID
-                        <input
-                          value={terminateContractForm.contractId}
-                          onChange={(event) =>
-                            setTerminateContractForm({ contractId: event.target.value })
-                          }
-                          placeholder="Contract UUID"
-                          required
-                        />
-                      </label>
-                      <button type="submit" disabled={activeTaskId === "terminate-contract"}>
-                        {activeTaskId === "terminate-contract"
-                          ? "Terminating..."
-                          : "Terminate contract"}
-                      </button>
-                    </form>
-                  </article>
-
-                  <article className="task-card">
-                    <h4>Create salary scale</h4>
-                    <form className="stack" onSubmit={createSalaryScale}>
-                      <div className="form-three-col">
-                        <label>
-                          Min pay
-                          <input
-                            type="number"
-                            min="0"
-                            value={salaryScaleForm.minimumPay}
-                            onChange={(event) =>
-                              setSalaryScaleForm((previous) => ({
-                                ...previous,
-                                minimumPay: event.target.value
-                              }))
-                            }
-                            required
-                          />
-                        </label>
-                        <label>
-                          Max pay
-                          <input
-                            type="number"
-                            min="0"
-                            value={salaryScaleForm.maximumPay}
-                            onChange={(event) =>
-                              setSalaryScaleForm((previous) => ({
-                                ...previous,
-                                maximumPay: event.target.value
-                              }))
-                            }
-                            required
-                          />
-                        </label>
-                        <label>
-                          Step
-                          <input
-                            type="number"
-                            min="0"
-                            max="1"
-                            step="0.1"
-                            value={salaryScaleForm.step}
-                            onChange={(event) =>
-                              setSalaryScaleForm((previous) => ({
-                                ...previous,
-                                step: event.target.value
-                              }))
-                            }
-                            required
-                          />
-                        </label>
-                      </div>
-                      <button type="submit" disabled={activeTaskId === "create-salary-scale"}>
-                        {activeTaskId === "create-salary-scale"
-                          ? "Creating..."
-                          : "Create salary scale"}
-                      </button>
-                    </form>
-                  </article>
-
-                  <article className="task-card">
-                    <h4>Create job position</h4>
-                    <form className="stack" onSubmit={createJobPositionCatalog}>
-                      <label>
-                        Position name
-                        <input
-                          value={jobPositionCatalogForm.name}
-                          onChange={(event) =>
-                            setJobPositionCatalogForm((previous) => ({
-                              ...previous,
-                              name: event.target.value
-                            }))
-                          }
-                          required
-                        />
-                      </label>
-                      <div className="form-three-col">
-                        <label>
-                          Min pay
-                          <input
-                            type="number"
-                            min="0"
-                            value={jobPositionCatalogForm.minimumPay}
-                            onChange={(event) =>
-                              setJobPositionCatalogForm((previous) => ({
-                                ...previous,
-                                minimumPay: event.target.value
-                              }))
-                            }
-                            required
-                          />
-                        </label>
-                        <label>
-                          Max pay
-                          <input
-                            type="number"
-                            min="0"
-                            value={jobPositionCatalogForm.maximumPay}
-                            onChange={(event) =>
-                              setJobPositionCatalogForm((previous) => ({
-                                ...previous,
-                                maximumPay: event.target.value
-                              }))
-                            }
-                            required
-                          />
-                        </label>
-                        <label>
-                          Step
-                          <input
-                            type="number"
-                            min="0"
-                            max="1"
-                            step="0.1"
-                            value={jobPositionCatalogForm.step}
-                            onChange={(event) =>
-                              setJobPositionCatalogForm((previous) => ({
-                                ...previous,
-                                step: event.target.value
-                              }))
-                            }
-                            required
-                          />
-                        </label>
-                      </div>
-                      <button type="submit" disabled={activeTaskId === "create-job-position"}>
-                        {activeTaskId === "create-job-position"
-                          ? "Creating..."
-                          : "Create job position"}
-                      </button>
-                    </form>
-                  </article>
-
-                  <article className="task-card">
-                    <h4>Create pension scheme</h4>
-                    <form className="stack" onSubmit={createPensionScheme}>
-                      <label>
-                        Scheme name
-                        <input
-                          value={pensionSchemeForm.name}
-                          onChange={(event) =>
-                            setPensionSchemeForm({ name: event.target.value })
-                          }
-                          required
-                        />
-                      </label>
-                      <button type="submit" disabled={activeTaskId === "create-pension-scheme"}>
-                        {activeTaskId === "create-pension-scheme"
-                          ? "Creating..."
-                          : "Create pension scheme"}
-                      </button>
-                    </form>
-                  </article>
-                </div>
-              </section>
-            )}
-          </section>
+          <RequestsPage
+            isAdmin={isAdmin}
+            runPortalAction={runPortalAction}
+            portalActions={PORTAL_ACTIONS}
+            activeActionId={activeActionId}
+            submitUserRequest={submitUserRequest}
+            createUserRequestForm={createUserRequestForm}
+            setCreateUserRequestForm={setCreateUserRequestForm}
+            loadCurrentUserContract={loadCurrentUserContract}
+            activeTaskId={activeTaskId}
+            requestContractUpdate={requestContractUpdate}
+            contractUpdateRequestForm={contractUpdateRequestForm}
+            setContractUpdateRequestForm={setContractUpdateRequestForm}
+            checkRequestStatus={checkRequestStatus}
+            requestLookupForm={requestLookupForm}
+            setRequestLookupForm={setRequestLookupForm}
+            loadRequestAttachments={loadRequestAttachments}
+            isAttachmentsLoading={isAttachmentsLoading}
+            updateOwnRequest={updateOwnRequest}
+            requestEditForm={requestEditForm}
+            setRequestEditForm={setRequestEditForm}
+            uploadRequestAttachment={uploadRequestAttachment}
+            documentUploadForm={documentUploadForm}
+            setDocumentUploadForm={setDocumentUploadForm}
+            respondToDocumentRequest={respondToDocumentRequest}
+            documentResponseForm={documentResponseForm}
+            setDocumentResponseForm={setDocumentResponseForm}
+            requestAttachmentList={requestAttachmentList}
+            attachmentsRequestId={attachmentsRequestId}
+            formatFileSize={formatFileSize}
+            toLocaleDateTime={toLocaleDateTime}
+            activeAttachmentId={activeAttachmentId}
+            downloadRequestAttachment={downloadRequestAttachment}
+            deleteRequestAttachment={deleteRequestAttachment}
+            requestsNotice={requestsNotice}
+            approveRequest={approveRequest}
+            approveRequestForm={approveRequestForm}
+            setApproveRequestForm={setApproveRequestForm}
+            createContract={createContract}
+            createContractForm={createContractForm}
+            setCreateContractForm={setCreateContractForm}
+            contractTypes={CONTRACT_TYPES}
+            userRoles={USER_ROLES}
+            formatEnumLabel={formatEnumLabel}
+            isAllowedContractStartDate={isAllowedContractStartDate}
+            updateUserProfile={updateUserProfile}
+            updateProfileForm={updateProfileForm}
+            setUpdateProfileForm={setUpdateProfileForm}
+            rejectRequest={rejectRequest}
+            rejectRequestForm={rejectRequestForm}
+            setRejectRequestForm={setRejectRequestForm}
+            requestEmployeeDocument={requestEmployeeDocument}
+            documentRequestForm={documentRequestForm}
+            setDocumentRequestForm={setDocumentRequestForm}
+            terminateContract={terminateContract}
+            terminateContractForm={terminateContractForm}
+            setTerminateContractForm={setTerminateContractForm}
+            createSalaryScale={createSalaryScale}
+            salaryScaleForm={salaryScaleForm}
+            setSalaryScaleForm={setSalaryScaleForm}
+            createJobPositionCatalog={createJobPositionCatalog}
+            jobPositionCatalogForm={jobPositionCatalogForm}
+            setJobPositionCatalogForm={setJobPositionCatalogForm}
+            createPensionScheme={createPensionScheme}
+            pensionSchemeForm={pensionSchemeForm}
+            setPensionSchemeForm={setPensionSchemeForm}
+            loadMyRequests={loadMyRequests}
+            isMyRequestsLoading={isMyRequestsLoading}
+            myRequestFilter={myRequestFilter}
+            setMyRequestFilter={setMyRequestFilter}
+            myRequestSearch={myRequestSearch}
+            setMyRequestSearch={setMyRequestSearch}
+            filteredMyRequests={filteredMyRequests}
+            getRequestGuidance={getRequestGuidance}
+            openRequestWorkspaceContext={openRequestWorkspaceContext}
+            cancelOwnRequest={cancelOwnRequest}
+            activeSectionId={activeSectionId}
+          />
         )}
 
         {isAdminRoute && (
-          <>
-            {!isAdmin ? (
-              <section className="panel restricted">
-                <h2>Admin area</h2>
-                <p className="helper-text">
-                  This section is available only with an ADMIN token.
-                </p>
-              </section>
-            ) : (
-              <>
-              <section className="portal-grid">
-                <article className="panel">
-                  <h2>Create user account</h2>
-                  <p className="helper-text">
-                    Register a new employee account directly from the admin portal.
-                  </p>
-                  <form onSubmit={registerFromAdmin} className="stack">
-                    <label>
-                      NetID
-                      <input
-                        value={registerForm.netId}
-                        onChange={(event) =>
-                          setRegisterForm((previous) => ({
-                            ...previous,
-                            netId: event.target.value
-                          }))
-                        }
-                        placeholder="e.g. employee1"
-                        required
-                      />
-                    </label>
-                    <label>
-                      Password
-                      <input
-                        type="password"
-                        value={registerForm.password}
-                        onChange={(event) =>
-                          setRegisterForm((previous) => ({
-                            ...previous,
-                            password: event.target.value
-                          }))
-                        }
-                        placeholder="create password"
-                        required
-                      />
-                    </label>
-                    <button type="submit" disabled={isRegisterLoading}>
-                      {isRegisterLoading ? "Creating..." : "Create user"}
-                    </button>
-                  </form>
-                  {adminNotice && (
-                    <p className={`notice ${adminNotice.type}`}>{adminNotice.text}</p>
-                  )}
-                </article>
-
-                <article className="panel">
-                  <h2>Admin operations</h2>
-                  <p className="helper-text">
-                    Trigger internal checks and inspect backend behavior.
-                  </p>
-                  <div className="action-grid">
-                    {adminActions.map((action) => {
-                      const result = actionResults[action.id];
-                      return (
-                        <div key={action.id} className="action-item">
-                          <button
-                            type="button"
-                            onClick={() => runPortalAction(action)}
-                            disabled={activeActionId === action.id}
-                          >
-                            {activeActionId === action.id ? "Running..." : action.label}
-                          </button>
-                          {result && (
-                            <>
-                              <p className={`mini-status ${result.status || "info"}`}>
-                                {result.message}
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </article>
-              </section>
-
-              <section className="panel task-modules">
-                <h2>Contract and Catalog Management</h2>
-                <p className="helper-text">
-                  Manage contract records and HR catalogs without manually crafting API payloads.
-                </p>
-                <div className="task-grid">
-                  <article className="task-card">
-                    <h4>Lookup contract</h4>
-                    <form className="stack" onSubmit={lookupContract}>
-                      <label>
-                        Contract ID
-                        <input
-                          value={contractLookupForm.contractId}
-                          onChange={(event) =>
-                            setContractLookupForm({ contractId: event.target.value })
-                          }
-                          placeholder="Contract UUID"
-                          required
-                        />
-                      </label>
-                      <button type="submit" disabled={activeTaskId === "lookup-contract"}>
-                        {activeTaskId === "lookup-contract" ? "Checking..." : "Lookup contract"}
-                      </button>
-                    </form>
-                  </article>
-
-                  <article className="task-card">
-                    <h4>Delete contract</h4>
-                    <form className="stack" onSubmit={deleteContract}>
-                      <label>
-                        Contract ID
-                        <input
-                          value={deleteContractForm.contractId}
-                          onChange={(event) =>
-                            setDeleteContractForm({ contractId: event.target.value })
-                          }
-                          placeholder="Contract UUID"
-                          required
-                        />
-                      </label>
-                      <button type="submit" disabled={activeTaskId === "delete-contract"}>
-                        {activeTaskId === "delete-contract" ? "Deleting..." : "Delete contract"}
-                      </button>
-                    </form>
-                  </article>
-
-                  <article className="task-card">
-                    <h4>Update salary scale pay range</h4>
-                    <form className="stack" onSubmit={updateSalaryScaleRange}>
-                      <label>
-                        Salary scale ID
-                        <input
-                          value={salaryScaleUpdateForm.salaryScaleId}
-                          onChange={(event) =>
-                            setSalaryScaleUpdateForm((previous) => ({
-                              ...previous,
-                              salaryScaleId: event.target.value
-                            }))
-                          }
-                          placeholder="Salary scale UUID"
-                          required
-                        />
-                      </label>
-                      <div className="form-two-col">
-                        <label>
-                          New minimum pay (optional)
-                          <input
-                            type="number"
-                            min="0"
-                            value={salaryScaleUpdateForm.minimumPay}
-                            onChange={(event) =>
-                              setSalaryScaleUpdateForm((previous) => ({
-                                ...previous,
-                                minimumPay: event.target.value
-                              }))
-                            }
-                          />
-                        </label>
-                        <label>
-                          New maximum pay (optional)
-                          <input
-                            type="number"
-                            min="0"
-                            value={salaryScaleUpdateForm.maximumPay}
-                            onChange={(event) =>
-                              setSalaryScaleUpdateForm((previous) => ({
-                                ...previous,
-                                maximumPay: event.target.value
-                              }))
-                            }
-                          />
-                        </label>
-                      </div>
-                      <button type="submit" disabled={activeTaskId === "update-salary-scale"}>
-                        {activeTaskId === "update-salary-scale"
-                          ? "Updating..."
-                          : "Update salary scale"}
-                      </button>
-                    </form>
-                  </article>
-
-                  <article className="task-card">
-                    <h4>Rename job position</h4>
-                    <form className="stack" onSubmit={renameJobPosition}>
-                      <label>
-                        Job position ID
-                        <input
-                          value={renameJobPositionForm.jobPositionId}
-                          onChange={(event) =>
-                            setRenameJobPositionForm((previous) => ({
-                              ...previous,
-                              jobPositionId: event.target.value
-                            }))
-                          }
-                          placeholder="Job position UUID"
-                          required
-                        />
-                      </label>
-                      <label>
-                        New name
-                        <input
-                          value={renameJobPositionForm.name}
-                          onChange={(event) =>
-                            setRenameJobPositionForm((previous) => ({
-                              ...previous,
-                              name: event.target.value
-                            }))
-                          }
-                          required
-                        />
-                      </label>
-                      <button type="submit" disabled={activeTaskId === "rename-job-position"}>
-                        {activeTaskId === "rename-job-position"
-                          ? "Renaming..."
-                          : "Rename job position"}
-                      </button>
-                    </form>
-                  </article>
-
-                  <article className="task-card">
-                    <h4>Rename pension scheme</h4>
-                    <form className="stack" onSubmit={renamePensionScheme}>
-                      <label>
-                        Pension scheme ID
-                        <input
-                          value={renamePensionSchemeForm.pensionSchemeId}
-                          onChange={(event) =>
-                            setRenamePensionSchemeForm((previous) => ({
-                              ...previous,
-                              pensionSchemeId: event.target.value
-                            }))
-                          }
-                          placeholder="Pension scheme UUID"
-                          required
-                        />
-                      </label>
-                      <label>
-                        New name
-                        <input
-                          value={renamePensionSchemeForm.name}
-                          onChange={(event) =>
-                            setRenamePensionSchemeForm((previous) => ({
-                              ...previous,
-                              name: event.target.value
-                            }))
-                          }
-                          required
-                        />
-                      </label>
-                      <button type="submit" disabled={activeTaskId === "rename-pension-scheme"}>
-                        {activeTaskId === "rename-pension-scheme"
-                          ? "Renaming..."
-                          : "Rename pension scheme"}
-                      </button>
-                    </form>
-                  </article>
-
-                  <article className="task-card">
-                    <h4>Delete salary/job/pension catalog entry</h4>
-                    <form className="stack" onSubmit={deleteCatalogEntity}>
-                      <label>
-                        Entity type
-                        <select
-                          value={deleteCatalogForm.entityType}
-                          onChange={(event) =>
-                            setDeleteCatalogForm((previous) => ({
-                              ...previous,
-                              entityType: event.target.value
-                            }))
-                          }
-                        >
-                          <option value="salary-scale">Salary scale</option>
-                          <option value="job-position">Job position</option>
-                          <option value="pension-scheme">Pension scheme</option>
-                        </select>
-                      </label>
-                      <label>
-                        Entity ID
-                        <input
-                          value={deleteCatalogForm.entityId}
-                          onChange={(event) =>
-                            setDeleteCatalogForm((previous) => ({
-                              ...previous,
-                              entityId: event.target.value
-                            }))
-                          }
-                          placeholder="UUID"
-                          required
-                        />
-                      </label>
-                      <button type="submit" disabled={activeTaskId === "delete-catalog-entity"}>
-                        {activeTaskId === "delete-catalog-entity"
-                          ? "Deleting..."
-                          : "Delete selected entity"}
-                      </button>
-                    </form>
-                  </article>
-                </div>
-              </section>
-              </>
-            )}
-          </>
+          <AdminPage
+            isAdmin={isAdmin}
+            registerFromAdmin={registerFromAdmin}
+            registerForm={registerForm}
+            setRegisterForm={setRegisterForm}
+            isRegisterLoading={isRegisterLoading}
+            adminNotice={adminNotice}
+            adminActions={adminActions}
+            actionResults={actionResults}
+            runPortalAction={runPortalAction}
+            activeActionId={activeActionId}
+            contractLookupForm={contractLookupForm}
+            setContractLookupForm={setContractLookupForm}
+            lookupContract={lookupContract}
+            activeTaskId={activeTaskId}
+            deleteContractForm={deleteContractForm}
+            setDeleteContractForm={setDeleteContractForm}
+            deleteContract={deleteContract}
+            salaryScaleUpdateForm={salaryScaleUpdateForm}
+            setSalaryScaleUpdateForm={setSalaryScaleUpdateForm}
+            updateSalaryScaleRange={updateSalaryScaleRange}
+            renameJobPosition={renameJobPosition}
+            renameJobPositionForm={renameJobPositionForm}
+            setRenameJobPositionForm={setRenameJobPositionForm}
+            renamePensionScheme={renamePensionScheme}
+            renamePensionSchemeForm={renamePensionSchemeForm}
+            setRenamePensionSchemeForm={setRenamePensionSchemeForm}
+            deleteCatalogEntity={deleteCatalogEntity}
+            deleteCatalogForm={deleteCatalogForm}
+            setDeleteCatalogForm={setDeleteCatalogForm}
+            activeSectionId={activeSectionId}
+          />
         )}
 
-        <section className="panel activity-panel">
-          <h2>Recent activity</h2>
-          <div className="activity-feed">
-            {activity.length === 0 && <p className="helper-text">No actions yet.</p>}
-            {activity.map((entry) => (
-              <div key={entry.id} className={`activity-item ${entry.type}`}>
-                <p className="activity-title">{entry.title}</p>
-                <p className="activity-detail">{entry.detail}</p>
-                <p className="activity-time">{entry.timestamp}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        {activeSectionId === "recent-activity" && (
+          <section id="recent-activity" className="panel activity-panel">
+            <h2>Recent activity</h2>
+            <div className="activity-feed">
+              {activity.length === 0 && <p className="helper-text">No actions yet.</p>}
+              {activity.map((entry) => (
+                <div key={entry.id} className={`activity-item ${entry.type}`}>
+                  <p className="activity-title">{entry.title}</p>
+                  <p className="activity-detail">{entry.detail}</p>
+                  <p className="activity-time">{entry.timestamp}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </section>
     </main>
   );

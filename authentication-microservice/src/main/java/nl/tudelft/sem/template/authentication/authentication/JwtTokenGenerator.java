@@ -19,6 +19,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class JwtTokenGenerator {
+    private static final int MIN_HS512_SECRET_BYTES = 64;
+
     /**
      * Time in milliseconds the JWT token is valid for.
      */
@@ -31,11 +33,28 @@ public class JwtTokenGenerator {
      */
     private final transient TimeProvider timeProvider;
 
-    // automatically loads jwt.secret from resources/application.yml
+    /**
+     * Construct token generator using Base64 secret from configuration.
+     *
+     * @param timeProvider Time provider used for issuing and expiring tokens
+     * @param jwtSecret Base64-encoded JWT signing secret
+     */
     @Autowired
     public JwtTokenGenerator(TimeProvider timeProvider, @Value("${jwt.secret}") String jwtSecret) {
         this.timeProvider = timeProvider;
-        this.jwtKey = Keys.hmacShaKeyFor(Base64.getDecoder().decode(jwtSecret));
+        byte[] decodedSecret;
+        try {
+            decodedSecret = Base64.getDecoder().decode(jwtSecret);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("JWT_SECRET must be valid Base64.", e);
+        }
+
+        if (decodedSecret.length < MIN_HS512_SECRET_BYTES) {
+            throw new IllegalStateException("JWT_SECRET is too short for HS512. "
+                    + "Decoded size must be at least 64 bytes.");
+        }
+
+        this.jwtKey = Keys.hmacShaKeyFor(decodedSecret);
     }
 
     /**

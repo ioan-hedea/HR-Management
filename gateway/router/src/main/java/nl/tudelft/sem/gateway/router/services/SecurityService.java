@@ -50,7 +50,11 @@ public class SecurityService {
                     // Prevent outsiders from accessing internal endpoints
                     .pathMatchers("/*/internal/**")
                         .access(new IpRangeReactiveAuthorizationManager(securityConfiguration.getInternalRanges()))
+                    .pathMatchers("/api/*/internal/**")
+                        .access(new IpRangeReactiveAuthorizationManager(securityConfiguration.getInternalRanges()))
                     .pathMatchers("/*/actuator/**")
+                        .access(new IpRangeReactiveAuthorizationManager(securityConfiguration.getInternalRanges()))
+                    .pathMatchers("/api/*/actuator/**")
                         .access(new IpRangeReactiveAuthorizationManager(securityConfiguration.getInternalRanges()))
                 .anyExchange().permitAll()
                 .and()

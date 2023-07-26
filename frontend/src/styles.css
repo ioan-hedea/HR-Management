@@ -357,11 +357,20 @@ label {
 }
 
 .portal-header {
+  position: sticky;
+  top: 1rem;
+  z-index: 5;
   padding: 0.95rem 1.05rem;
   border-radius: 0.95rem;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.86);
   animation: rise 0.35s ease-out both;
+}
+
+.portal-header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
 }
 
 .portal-header h1 {
@@ -381,6 +390,57 @@ label {
   font-size: 0.74rem;
   font-family: var(--mono);
   color: var(--emerald-deep);
+}
+
+.page-topnav {
+  margin-top: 0.78rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.topnav-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.38rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  transition: border-color 0.16s ease, color 0.16s ease, background-color 0.16s ease;
+}
+
+.topnav-chip:hover {
+  transform: none;
+  filter: none;
+  color: var(--emerald-deep);
+  border-color: rgba(15, 155, 126, 0.45);
+  background: rgba(15, 155, 126, 0.08);
+}
+
+.topnav-chip.active {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(130deg, var(--emerald), var(--emerald-deep));
+}
+
+#me-profile,
+#me-contract,
+#me-summary,
+#requests-console,
+#requests-admin-console,
+#requests-modules,
+#requests-hr-modules,
+#my-requests,
+#admin-overview,
+#admin-operations,
+#recent-activity {
+  scroll-margin-top: 8.5rem;
 }
 
 .portal-grid {
@@ -490,7 +550,7 @@ label {
   margin-top: 0.72rem;
   display: grid;
   gap: 0.8rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
 .task-card {
@@ -498,6 +558,7 @@ label {
   border-radius: 0.86rem;
   background: rgba(255, 255, 255, 0.9);
   padding: 0.85rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .task-card h4 {
@@ -534,6 +595,21 @@ label {
   margin-top: 0.8rem;
 }
 
+.status-details {
+  margin: 0.45rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.status-details li {
+  margin: 0;
+  line-height: 1.35;
+}
+
 .activity-panel {
   margin-bottom: 0.3rem;
 }
@@ -543,8 +619,9 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.52rem;
-  max-height: 270px;
+  max-height: 340px;
   overflow: auto;
+  padding-right: 0.2rem;
 }
 
 .activity-item {
@@ -560,6 +637,45 @@ label {
 
 .activity-item.error {
   border-color: rgba(176, 63, 63, 0.34);
+}
+
+.inline-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+button.ghost.danger {
+  color: var(--danger);
+  border-color: rgba(176, 63, 63, 0.3);
+  background: rgba(176, 63, 63, 0.08);
+}
+
+button.ghost.danger:hover {
+  filter: none;
+  background: rgba(176, 63, 63, 0.15);
+}
+
+.attachment-list {
+  margin-top: 0.62rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.58rem;
+}
+
+.attachment-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 0.65rem 0.75rem;
+}
+
+input[type="file"] {
+  padding: 0.46rem 0.58rem;
 }
 
 .activity-title {
@@ -604,6 +720,10 @@ label {
     position: static;
   }
 
+  .portal-header {
+    position: static;
+  }
+
   .portal-grid {
     grid-template-columns: 1fr;
   }
@@ -618,6 +738,10 @@ label {
 
   .form-three-col {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .attachment-item {
+    flex-direction: column;
   }
 }
 

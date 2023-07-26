@@ -1,6 +1,8 @@
 package nl.tudelft.sem.request.microservice.services;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Optional;
@@ -34,7 +36,9 @@ public class RequestService {
         
         this.requestRepository = requestRepository;
         this.contractClient = contractClient;
-        mapper = new ObjectMapper();
+        mapper = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
     /**

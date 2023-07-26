@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import nl.tudelft.sem.contract.commons.entities.ActionSuccessDto;
 import nl.tudelft.sem.contract.commons.entities.ContractDto;
 import nl.tudelft.sem.contract.commons.entities.ContractModificationDto;
+import nl.tudelft.sem.contract.commons.entities.ContractStatus;
 import nl.tudelft.sem.contract.microservice.database.entities.Contract;
 import nl.tudelft.sem.contract.microservice.database.repositories.ContractRepository;
 import nl.tudelft.sem.contract.microservice.exceptions.ActionNotAllowedException;
@@ -52,6 +53,27 @@ public class ContractController {
     @GetMapping("/{id}")
     ResponseEntity<ContractDto> getContract(@PathVariable UUID id) {
         return ResponseEntity.ok(contractRepository.findById(id).orElseThrow(ContractNotFoundException::new).getDto());
+    }
+
+    /**
+     * Get the current contract for an employee.
+     *
+     * <p>Returns the most recent active contract if present; otherwise returns the employee's latest contract.
+     *
+     * @param employeeId employee id
+     * @return current contract dto
+     */
+    @GetMapping("/current/employee/{employeeId}")
+    ResponseEntity<ContractDto> getCurrentContractForEmployee(@PathVariable UUID employeeId) {
+        return contractRepository
+                .findFirstByContractPartiesEmployeeIdAndContractInfoStatusOrderByContractTermsStartDateDescIdDesc(
+                        employeeId, ContractStatus.ACTIVE
+                )
+                .or(() -> contractRepository.findFirstByContractPartiesEmployeeIdOrderByContractTermsStartDateDescIdDesc(
+                        employeeId
+                ))
+                .map(contract -> ResponseEntity.ok(contract.getDto()))
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @PostMapping("")

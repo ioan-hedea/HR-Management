@@ -49,6 +49,20 @@ if (( ${#missing_vars[@]} > 0 )); then
   exit 1
 fi
 
+if ! jwt_secret_bytes="$(
+  printf '%s' "${JWT_SECRET}" | openssl base64 -d -A 2>/dev/null | wc -c | tr -d ' '
+)"; then
+  echo "[error] JWT_SECRET is not valid Base64."
+  exit 1
+fi
+
+if [[ "${jwt_secret_bytes}" -lt 64 ]]; then
+  echo "[error] JWT_SECRET is too short for HS512."
+  echo "Decoded size is ${jwt_secret_bytes} bytes, but at least 64 bytes are required."
+  echo "Generate one with: openssl rand -base64 64"
+  exit 1
+fi
+
 JAVA_VERSION="$(
   java -version 2>&1 | awk -F[\".] '/version/ {print $2; exit}'
 )"
@@ -112,7 +126,7 @@ start_service() {
     return
   fi
 
-  SPRING_PROFILES_ACTIVE=postgres "$@" >"${log_file}" 2>&1 &
+  nohup env SPRING_PROFILES_ACTIVE=postgres "$@" >"${log_file}" 2>&1 < /dev/null &
   local pid=$!
   echo "${pid}" >"${pid_file}"
   echo "[ok] started ${name} (pid ${pid})"

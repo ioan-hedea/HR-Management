@@ -20,9 +20,13 @@ public class RoutingService {
                                                         String routeName,
                                                         String path,
                                                         String uri) {
-        return builder.route(routeName, r -> r.path(String.format("/%s/**", path))
-                .filters(f -> f.stripPrefix(1))
-                .uri(uri));
+        return builder
+                .route(routeName, r -> r.path(String.format("/%s/**", path))
+                        .filters(f -> f.stripPrefix(1))
+                        .uri(uri))
+                .route(routeName + "-api", r -> r.path(String.format("/api/%s/**", path))
+                        .filters(f -> f.stripPrefix(2))
+                        .uri(uri));
     }
 
     /**

@@ -42,11 +42,13 @@ public class GeneralRequest extends BaseEntity<RequestDto> {
 
     private UUID contractId;
 
+    @Column(columnDefinition = "TEXT")
     private String requestBody;
 
     @NotNull
     private LocalDateTime requestDate;
 
+    @Column(columnDefinition = "TEXT")
     private String responseBody;
 
     private LocalDateTime responseDate;
@@ -100,8 +102,20 @@ public class GeneralRequest extends BaseEntity<RequestDto> {
         return this.contractId;
     }
 
+    public String getAuthor() {
+        return this.author;
+    }
+
     public String getRequestBody() {
         return this.requestBody;
+    }
+
+    public LocalDateTime getRequestDate() {
+        return this.requestDate;
+    }
+
+    public LocalDateTime getStartDate() {
+        return this.startDate;
     }
 
     public String getResponseBody() {
@@ -116,12 +130,28 @@ public class GeneralRequest extends BaseEntity<RequestDto> {
         this.status = status;
     }
 
+    public void setContractId(UUID contractId) {
+        this.contractId = contractId;
+    }
+
+    public void setRequestBody(String requestBody) {
+        this.requestBody = requestBody;
+    }
+
     public void setResponseBody(String responseBody) {
         this.responseBody = responseBody;
     }
 
     public void setResponseDate(LocalDateTime responseDate) {
         this.responseDate = responseDate;
+    }
+
+    public void setStartDate(LocalDateTime startDate) {
+        this.startDate = startDate;
+    }
+
+    public void setNumberOfDays(int numberOfDays) {
+        this.numberOfDays = numberOfDays;
     }
 
     public void approveRequest(ContractClient contractClient, RequestService requestService) {

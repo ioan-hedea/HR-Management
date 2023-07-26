@@ -140,6 +140,11 @@ public class UserController {
      */
     @PostMapping("/saveUser/{netId}")
     public ResponseEntity<UserDto> createUser(@PathVariable String netId) {
+        var existingUser = userEntityRepository.findByNetId(netId);
+        if (existingUser.isPresent()) {
+            return ResponseEntity.ok(existingUser.get().getDto());
+        }
+
         UserEntity user = new UserEntity(netId, Role.CANDIDATE, "", "", "", "", "", "");
         userService.addUser(user);
         return new ResponseEntity<>(user.getDto(), HttpStatus.OK);
