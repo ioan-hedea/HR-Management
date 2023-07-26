@@ -113,6 +113,20 @@ label {
   font-size: 0.93rem;
 }
 
+.checkbox-line {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.checkbox-line input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--emerald-deep);
+}
+
 .brand-kicker {
   margin: 0;
   text-transform: uppercase;

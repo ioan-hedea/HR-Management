@@ -1,28 +1,28 @@
 package nl.tudelft.sem.template.authentication.config;
 
-import lombok.Getter;
-import lombok.Setter;
 import nl.tudelft.sem.template.authentication.domain.user.PasswordHashingService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * The type Web security config.
+ * Security configuration for authentication service.
  */
 @Configuration
-public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
-    @Getter
-    @Setter(onMethod = @__({@Autowired})) // add autowired annotation on setter
-    private transient UserDetailsService userDetailsService;
+public class WebSecurityConfig {
+    private final transient UserDetailsService userDetailsService;
+
+    public WebSecurityConfig(UserDetailsService userDetailsService) {
+        this.userDetailsService = userDetailsService;
+    }
 
     /**
      * Password encoder password encoder.
@@ -39,19 +39,40 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
         return new PasswordHashingService(passwordEncoder());
     }
 
+    /**
+     * Authentication provider using the service's user store and password encoder.
+     *
+     * @return configured DAO authentication provider
+     */
     @Bean
-    @Override
-    public AuthenticationManager authenticationManagerBean() throws Exception {
-        return super.authenticationManagerBean();
+    public DaoAuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userDetailsService);
+        provider.setPasswordEncoder(passwordEncoder());
+        return provider;
     }
 
-    @Override
-    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-        auth.userDetailsService(userDetailsService).passwordEncoder(passwordEncoder());
+    /**
+     * Exposes Spring's shared authentication manager.
+     *
+     * @param configuration authentication configuration
+     * @return authentication manager instance
+     * @throws Exception if manager cannot be resolved
+     */
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+        return configuration.getAuthenticationManager();
     }
 
-    @Override
-    protected void configure(HttpSecurity http) throws Exception {
+    /**
+     * Configures stateless JWT security rules for authentication endpoints.
+     *
+     * @param http http security builder
+     * @return built security filter chain
+     * @throws Exception if security setup fails
+     */
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.headers().frameOptions().sameOrigin()
                 .and().csrf().disable()
                 .authorizeRequests()
@@ -61,5 +82,6 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers("/actuator/health").permitAll()
                 .anyRequest().authenticated()
                 .and().sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+        return http.build();
     }
 }

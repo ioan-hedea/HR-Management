@@ -8,6 +8,7 @@ import javax.persistence.Enumerated;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -48,10 +49,12 @@ public class MessageEntity extends BaseEntity<MessageDto> {
     private String message;
 
     @Column(nullable = false)
+    @Builder.Default
     private boolean sent = false;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "priority", nullable = false)
+    @Builder.Default
     private MessagePriority priority = MessagePriority.LOW;
 
     @Override

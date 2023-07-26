@@ -3,6 +3,7 @@ import { ApiError, apiRequest } from "./api";
 
 const TOKEN_STORAGE_KEY = "hr_frontend_token";
 const NETID_STORAGE_KEY = "hr_frontend_netid";
+const REMEMBER_SESSION_KEY = "hr_frontend_remember";
 
 const PORTAL_ACTIONS = [
   {
@@ -29,7 +30,7 @@ const PORTAL_ACTIONS = [
     service: "user",
     path: "/internal/user/getAllNetIds",
     method: "GET",
-    requiresToken: false,
+    requiresToken: true,
     minRole: "ADMIN"
   },
   {
@@ -38,7 +39,7 @@ const PORTAL_ACTIONS = [
     service: "request",
     path: "/internal/request/open",
     method: "GET",
-    requiresToken: false,
+    requiresToken: true,
     minRole: "ADMIN"
   }
 ];
@@ -86,7 +87,20 @@ function readStorageValue(key) {
     return "";
   }
 
+  const sessionValue = window.sessionStorage.getItem(key);
+  if (sessionValue) {
+    return sessionValue;
+  }
+
   return window.localStorage.getItem(key) || "";
+}
+
+function readRememberSessionPreference() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.localStorage.getItem(REMEMBER_SESSION_KEY) === "true";
 }
 
 function normalizePath(path) {
@@ -233,6 +247,25 @@ function decodeJwtPayload(token) {
   }
 }
 
+function getTokenExpirationMs(token) {
+  const payload = decodeJwtPayload(token);
+  const expiration = Number(payload?.exp);
+  if (!Number.isFinite(expiration) || expiration <= 0) {
+    return null;
+  }
+
+  return expiration * 1000;
+}
+
+function isTokenExpired(token) {
+  const expiration = getTokenExpirationMs(token);
+  if (!expiration) {
+    return false;
+  }
+
+  return Date.now() >= expiration;
+}
+
 function flattenClaimValue(value) {
   if (Array.isArray(value)) {
     return value.map(flattenClaimValue).join(" ");
@@ -288,6 +321,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState("login");
   const [registerForm, setRegisterForm] = useState({ netId: "", password: "" });
   const [loginForm, setLoginForm] = useState({ netId: "", password: "" });
+  const [rememberSession, setRememberSession] = useState(readRememberSessionPreference);
   const [token, setToken] = useState(() => readStorageValue(TOKEN_STORAGE_KEY));
   const [activeNetId, setActiveNetId] = useState(initialNetIdFromStorage);
   const [activeRole, setActiveRole] = useState(() =>
@@ -324,6 +358,54 @@ export default function App() {
   });
   const [requestLookupForm, setRequestLookupForm] = useState({ requestId: "" });
   const [approveRequestForm, setApproveRequestForm] = useState({ requestId: "" });
+  const [rejectRequestForm, setRejectRequestForm] = useState({
+    requestId: "",
+    reason: ""
+  });
+  const [documentRequestForm, setDocumentRequestForm] = useState({
+    employeeRef: "",
+    requestBody: ""
+  });
+  const [terminateContractForm, setTerminateContractForm] = useState({
+    contractId: ""
+  });
+  const [contractLookupForm, setContractLookupForm] = useState({
+    contractId: ""
+  });
+  const [deleteContractForm, setDeleteContractForm] = useState({
+    contractId: ""
+  });
+  const [salaryScaleForm, setSalaryScaleForm] = useState({
+    minimumPay: "2500",
+    maximumPay: "4500",
+    step: "0.1"
+  });
+  const [salaryScaleUpdateForm, setSalaryScaleUpdateForm] = useState({
+    salaryScaleId: "",
+    minimumPay: "",
+    maximumPay: ""
+  });
+  const [jobPositionCatalogForm, setJobPositionCatalogForm] = useState({
+    name: "Software Engineer",
+    minimumPay: "2500",
+    maximumPay: "4500",
+    step: "0.1"
+  });
+  const [renameJobPositionForm, setRenameJobPositionForm] = useState({
+    jobPositionId: "",
+    name: ""
+  });
+  const [pensionSchemeForm, setPensionSchemeForm] = useState({
+    name: "Default Pension"
+  });
+  const [renamePensionSchemeForm, setRenamePensionSchemeForm] = useState({
+    pensionSchemeId: "",
+    name: ""
+  });
+  const [deleteCatalogForm, setDeleteCatalogForm] = useState({
+    entityType: "salary-scale",
+    entityId: ""
+  });
   const [createContractForm, setCreateContractForm] = useState({
     employeeId: "",
     employerId: "",
@@ -478,7 +560,7 @@ export default function App() {
     );
   };
 
-  const saveSession = (nextToken, suggestedNetId = "") => {
+  const saveSession = (nextToken, suggestedNetId = "", persistSession = rememberSession) => {
     const payload = decodeJwtPayload(nextToken);
     const resolvedNetId = suggestedNetId || payload?.sub || "";
     const resolvedRole = extractRoleFromToken(nextToken);
@@ -488,16 +570,25 @@ export default function App() {
     setActiveRole(resolvedRole);
 
     if (typeof window !== "undefined") {
+      window.localStorage.setItem(REMEMBER_SESSION_KEY, String(Boolean(persistSession)));
       if (nextToken) {
-        window.localStorage.setItem(TOKEN_STORAGE_KEY, nextToken);
+        const persistentStorage = persistSession ? window.localStorage : window.sessionStorage;
+        const volatileStorage = persistSession ? window.sessionStorage : window.localStorage;
+        persistentStorage.setItem(TOKEN_STORAGE_KEY, nextToken);
+        volatileStorage.removeItem(TOKEN_STORAGE_KEY);
       } else {
         window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+        window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
       }
 
       if (resolvedNetId) {
-        window.localStorage.setItem(NETID_STORAGE_KEY, resolvedNetId);
+        const persistentStorage = persistSession ? window.localStorage : window.sessionStorage;
+        const volatileStorage = persistSession ? window.sessionStorage : window.localStorage;
+        persistentStorage.setItem(NETID_STORAGE_KEY, resolvedNetId);
+        volatileStorage.removeItem(NETID_STORAGE_KEY);
       } else {
         window.localStorage.removeItem(NETID_STORAGE_KEY);
+        window.sessionStorage.removeItem(NETID_STORAGE_KEY);
       }
     }
 
@@ -505,7 +596,7 @@ export default function App() {
   };
 
   const clearSession = () => {
-    saveSession("");
+    saveSession("", "", rememberSession);
     setActionResults({});
     setRequestsNotice(null);
     setAuthNotice({
@@ -515,6 +606,32 @@ export default function App() {
     pushActivity("Session closed", "User signed out.");
     navigate("/login");
   };
+
+  useEffect(() => {
+    if (!token || typeof window === "undefined") {
+      return undefined;
+    }
+
+    const maybeExpireSession = () => {
+      if (!isTokenExpired(token)) {
+        return;
+      }
+
+      saveSession("", "", rememberSession);
+      setActionResults({});
+      setRequestsNotice(null);
+      setAuthNotice({
+        type: "info",
+        text: "Session expired. Please sign in again."
+      });
+      pushActivity("Session expired", "JWT expiration reached. Sign in again.");
+      navigate("/login", true);
+    };
+
+    maybeExpireSession();
+    const intervalId = window.setInterval(maybeExpireSession, 30_000);
+    return () => window.clearInterval(intervalId);
+  }, [token, rememberSession]);
 
   const runTask = async (taskId, taskName, callback, options = {}) => {
     setActiveTaskId(taskId);
@@ -626,7 +743,7 @@ export default function App() {
         throw new Error("Authentication response did not include a token.");
       }
 
-      const session = saveSession(nextToken, loginForm.netId);
+      const session = saveSession(nextToken, loginForm.netId, rememberSession);
       setAuthNotice({
         type: "success",
         text: `Authenticated as ${session.netId || loginForm.netId}.`
@@ -737,6 +854,457 @@ export default function App() {
         method: "PUT",
         token
       })
+    );
+  };
+
+  const rejectRequest = async (event) => {
+    event.preventDefault();
+    const requestId = rejectRequestForm.requestId.trim();
+    if (!requestId) {
+      setRequestsNotice({
+        type: "error",
+        message: "Please provide a request number."
+      });
+      return;
+    }
+    if (!isUuid(requestId)) {
+      setRequestsNotice({
+        type: "error",
+        message: "Request number must be a valid UUID."
+      });
+      return;
+    }
+
+    const reason = rejectRequestForm.reason.trim() || "Request rejected by HR.";
+    await runTask("reject-request", "Reject employee request", () =>
+      apiRequest(`/api/request/internal/request/reject/${requestId}`, {
+        method: "PUT",
+        body: reason,
+        token
+      })
+    );
+  };
+
+  const requestEmployeeDocument = async (event) => {
+    event.preventDefault();
+    const employeeRef = documentRequestForm.employeeRef.trim();
+    const requestBody = documentRequestForm.requestBody.trim();
+    if (!employeeRef || !requestBody) {
+      setRequestsNotice({
+        type: "error",
+        message: "Please provide employee reference and document details."
+      });
+      return;
+    }
+
+    let employeeId = "";
+    try {
+      employeeId = await resolveUserUuid(employeeRef, token);
+    } catch (error) {
+      setRequestsNotice({
+        type: "error",
+        message: formatApiError(error)
+      });
+      return;
+    }
+
+    await runTask(
+      "request-document",
+      "Request employee document",
+      () =>
+        apiRequest(`/api/request/internal/request/document/${employeeId}`, {
+          method: "POST",
+          body: requestBody,
+          token
+        }),
+      {
+        successMessage: (response) => {
+          const requestId = response.data?.id;
+          if (requestId) {
+            return `Document request sent. Tracking number: ${requestId}.`;
+          }
+          return `Document request sent successfully (HTTP ${response.status}).`;
+        },
+        onSuccess: () => {
+          setDocumentRequestForm({ employeeRef: "", requestBody: "" });
+        }
+      }
+    );
+  };
+
+  const terminateContract = async (event) => {
+    event.preventDefault();
+    const contractId = terminateContractForm.contractId.trim();
+    if (!contractId) {
+      setRequestsNotice({
+        type: "error",
+        message: "Please provide a contract ID."
+      });
+      return;
+    }
+    if (!isUuid(contractId)) {
+      setRequestsNotice({
+        type: "error",
+        message: "Contract ID must be a valid UUID."
+      });
+      return;
+    }
+
+    await runTask("terminate-contract", "Terminate contract", () =>
+      apiRequest(`/api/contract/internal/contract/terminate/${contractId}`, {
+        method: "DELETE",
+        token
+      })
+    );
+  };
+
+  const createSalaryScale = async (event) => {
+    event.preventDefault();
+
+    const minimumPay = toFiniteNumber(salaryScaleForm.minimumPay, 0);
+    const maximumPay = toFiniteNumber(salaryScaleForm.maximumPay, 0);
+    const step = toFiniteNumber(salaryScaleForm.step, 0);
+
+    if (maximumPay < minimumPay) {
+      setRequestsNotice({
+        type: "error",
+        message: "Maximum pay must be greater than or equal to minimum pay."
+      });
+      return;
+    }
+
+    await runTask(
+      "create-salary-scale",
+      "Create salary scale",
+      () =>
+        apiRequest("/api/contract/internal/salary-scale", {
+          method: "POST",
+          body: {
+            minimumPay,
+            maximumPay,
+            step
+          },
+          token
+        }),
+      {
+        successMessage: (response) => {
+          const scaleId = response.data?.id;
+          if (scaleId) {
+            return `Salary scale created successfully. ID: ${scaleId}.`;
+          }
+          return `Salary scale created successfully (HTTP ${response.status}).`;
+        }
+      }
+    );
+  };
+
+  const createJobPositionCatalog = async (event) => {
+    event.preventDefault();
+    const name = jobPositionCatalogForm.name.trim();
+    if (!name) {
+      setRequestsNotice({
+        type: "error",
+        message: "Please provide a job position name."
+      });
+      return;
+    }
+
+    const minimumPay = toFiniteNumber(jobPositionCatalogForm.minimumPay, 0);
+    const maximumPay = toFiniteNumber(jobPositionCatalogForm.maximumPay, 0);
+    const step = toFiniteNumber(jobPositionCatalogForm.step, 0);
+    if (maximumPay < minimumPay) {
+      setRequestsNotice({
+        type: "error",
+        message: "Maximum pay must be greater than or equal to minimum pay."
+      });
+      return;
+    }
+
+    await runTask(
+      "create-job-position",
+      "Create job position",
+      () =>
+        apiRequest("/api/contract/internal/job-position", {
+          method: "POST",
+          body: {
+            name,
+            salaryScale: {
+              minimumPay,
+              maximumPay,
+              step
+            }
+          },
+          token
+        }),
+      {
+        successMessage: (response) => {
+          const positionId = response.data?.id;
+          if (positionId) {
+            return `Job position created successfully. ID: ${positionId}.`;
+          }
+          return `Job position created successfully (HTTP ${response.status}).`;
+        }
+      }
+    );
+  };
+
+  const createPensionScheme = async (event) => {
+    event.preventDefault();
+    const name = pensionSchemeForm.name.trim();
+    if (!name) {
+      setRequestsNotice({
+        type: "error",
+        message: "Please provide a pension scheme name."
+      });
+      return;
+    }
+
+    await runTask(
+      "create-pension-scheme",
+      "Create pension scheme",
+      () =>
+        apiRequest("/api/contract/internal/pension-scheme", {
+          method: "POST",
+          body: { name },
+          token
+        }),
+      {
+        successMessage: (response) => {
+          const schemeId = response.data?.id;
+          if (schemeId) {
+            return `Pension scheme created successfully. ID: ${schemeId}.`;
+          }
+          return `Pension scheme created successfully (HTTP ${response.status}).`;
+        }
+      }
+    );
+  };
+
+  const lookupContract = async (event) => {
+    event.preventDefault();
+    const contractId = contractLookupForm.contractId.trim();
+    if (!contractId) {
+      setRequestsNotice({
+        type: "error",
+        message: "Please provide a contract ID."
+      });
+      return;
+    }
+    if (!isUuid(contractId)) {
+      setRequestsNotice({
+        type: "error",
+        message: "Contract ID must be a valid UUID."
+      });
+      return;
+    }
+
+    await runTask(
+      "lookup-contract",
+      "Lookup contract",
+      () =>
+        apiRequest(`/api/contract/internal/contract/${contractId}`, {
+          method: "GET",
+          token
+        }),
+      {
+        successMessage: (response) => {
+          const contractType = response.data?.contractInfo?.type;
+          const contractStatus = response.data?.contractInfo?.status;
+          if (contractType || contractStatus) {
+            return `Contract found: ${formatEnumLabel(contractType || "UNKNOWN")} (${formatEnumLabel(contractStatus || "UNKNOWN")}).`;
+          }
+          return `Contract found successfully (HTTP ${response.status}).`;
+        }
+      }
+    );
+  };
+
+  const deleteContract = async (event) => {
+    event.preventDefault();
+    const contractId = deleteContractForm.contractId.trim();
+    if (!contractId) {
+      setRequestsNotice({
+        type: "error",
+        message: "Please provide a contract ID."
+      });
+      return;
+    }
+    if (!isUuid(contractId)) {
+      setRequestsNotice({
+        type: "error",
+        message: "Contract ID must be a valid UUID."
+      });
+      return;
+    }
+
+    await runTask("delete-contract", "Delete contract", () =>
+      apiRequest(`/api/contract/internal/contract/${contractId}`, {
+        method: "DELETE",
+        token
+      })
+    );
+  };
+
+  const updateSalaryScaleRange = async (event) => {
+    event.preventDefault();
+    const scaleId = salaryScaleUpdateForm.salaryScaleId.trim();
+    if (!scaleId) {
+      setRequestsNotice({
+        type: "error",
+        message: "Please provide a salary scale ID."
+      });
+      return;
+    }
+    if (!isUuid(scaleId)) {
+      setRequestsNotice({
+        type: "error",
+        message: "Salary scale ID must be a valid UUID."
+      });
+      return;
+    }
+
+    const hasMinimumUpdate = salaryScaleUpdateForm.minimumPay !== "";
+    const hasMaximumUpdate = salaryScaleUpdateForm.maximumPay !== "";
+    if (!hasMinimumUpdate && !hasMaximumUpdate) {
+      setRequestsNotice({
+        type: "error",
+        message: "Provide at least one pay update (minimum or maximum)."
+      });
+      return;
+    }
+
+    await runTask(
+      "update-salary-scale",
+      "Update salary scale",
+      async () => {
+        let response = null;
+        if (hasMinimumUpdate) {
+          response = await apiRequest(`/api/contract/internal/salary-scale/${scaleId}/edit-minimum-pay`, {
+            method: "PUT",
+            body: { data: salaryScaleUpdateForm.minimumPay },
+            token
+          });
+        }
+        if (hasMaximumUpdate) {
+          response = await apiRequest(`/api/contract/internal/salary-scale/${scaleId}/edit-maximum-pay`, {
+            method: "PUT",
+            body: { data: salaryScaleUpdateForm.maximumPay },
+            token
+          });
+        }
+        return response;
+      },
+      {
+        successMessage: () => "Salary scale updated successfully.",
+        onSuccess: () => {
+          setSalaryScaleUpdateForm((previous) => ({
+            ...previous,
+            minimumPay: "",
+            maximumPay: ""
+          }));
+        }
+      }
+    );
+  };
+
+  const renameJobPosition = async (event) => {
+    event.preventDefault();
+    const jobPositionId = renameJobPositionForm.jobPositionId.trim();
+    const name = renameJobPositionForm.name.trim();
+    if (!jobPositionId || !name) {
+      setRequestsNotice({
+        type: "error",
+        message: "Please provide job position ID and the new name."
+      });
+      return;
+    }
+    if (!isUuid(jobPositionId)) {
+      setRequestsNotice({
+        type: "error",
+        message: "Job position ID must be a valid UUID."
+      });
+      return;
+    }
+
+    await runTask("rename-job-position", "Rename job position", () =>
+      apiRequest(`/api/contract/internal/job-position/${jobPositionId}/edit-name`, {
+        method: "PUT",
+        body: { data: name },
+        token
+      })
+    );
+  };
+
+  const renamePensionScheme = async (event) => {
+    event.preventDefault();
+    const pensionSchemeId = renamePensionSchemeForm.pensionSchemeId.trim();
+    const name = renamePensionSchemeForm.name.trim();
+    if (!pensionSchemeId || !name) {
+      setRequestsNotice({
+        type: "error",
+        message: "Please provide pension scheme ID and the new name."
+      });
+      return;
+    }
+    if (!isUuid(pensionSchemeId)) {
+      setRequestsNotice({
+        type: "error",
+        message: "Pension scheme ID must be a valid UUID."
+      });
+      return;
+    }
+
+    await runTask("rename-pension-scheme", "Rename pension scheme", () =>
+      apiRequest(`/api/contract/internal/pension-scheme/${pensionSchemeId}/edit-name`, {
+        method: "PUT",
+        body: { data: name },
+        token
+      })
+    );
+  };
+
+  const deleteCatalogEntity = async (event) => {
+    event.preventDefault();
+    const entityId = deleteCatalogForm.entityId.trim();
+    if (!entityId) {
+      setRequestsNotice({
+        type: "error",
+        message: "Please provide an entity ID."
+      });
+      return;
+    }
+    if (!isUuid(entityId)) {
+      setRequestsNotice({
+        type: "error",
+        message: "Entity ID must be a valid UUID."
+      });
+      return;
+    }
+
+    const entityConfig = {
+      "salary-scale": {
+        label: "salary scale",
+        path: `/api/contract/internal/salary-scale/${entityId}`
+      },
+      "job-position": {
+        label: "job position",
+        path: `/api/contract/internal/job-position/${entityId}`
+      },
+      "pension-scheme": {
+        label: "pension scheme",
+        path: `/api/contract/internal/pension-scheme/${entityId}`
+      }
+    };
+
+    const selectedEntity = entityConfig[deleteCatalogForm.entityType];
+    await runTask(
+      "delete-catalog-entity",
+      `Delete ${selectedEntity.label}`,
+      () =>
+        apiRequest(selectedEntity.path, {
+          method: "DELETE",
+          token
+        })
     );
   };
 
@@ -1160,6 +1728,15 @@ export default function App() {
                   placeholder="your password"
                   required
                 />
+              </label>
+
+              <label className="checkbox-line">
+                <input
+                  type="checkbox"
+                  checked={rememberSession}
+                  onChange={(event) => setRememberSession(event.target.checked)}
+                />
+                Keep me signed in on this device
               </label>
 
               <button type="submit" disabled={isLoginLoading}>
@@ -2010,6 +2587,263 @@ export default function App() {
                       </button>
                     </form>
                   </article>
+
+                  <article className="task-card">
+                    <h4>Reject employee request</h4>
+                    <form className="stack" onSubmit={rejectRequest}>
+                      <label>
+                        Request number
+                        <input
+                          value={rejectRequestForm.requestId}
+                          onChange={(event) =>
+                            setRejectRequestForm((previous) => ({
+                              ...previous,
+                              requestId: event.target.value
+                            }))
+                          }
+                          placeholder="Request UUID"
+                          required
+                        />
+                      </label>
+                      <label>
+                        Rejection reason
+                        <textarea
+                          className="compact-textarea"
+                          rows={3}
+                          value={rejectRequestForm.reason}
+                          onChange={(event) =>
+                            setRejectRequestForm((previous) => ({
+                              ...previous,
+                              reason: event.target.value
+                            }))
+                          }
+                          placeholder="Explain why the request is rejected"
+                        />
+                      </label>
+                      <button type="submit" disabled={activeTaskId === "reject-request"}>
+                        {activeTaskId === "reject-request"
+                          ? "Rejecting..."
+                          : "Reject employee request"}
+                      </button>
+                    </form>
+                  </article>
+
+                  <article className="task-card">
+                    <h4>Request employee document</h4>
+                    <form className="stack" onSubmit={requestEmployeeDocument}>
+                      <label>
+                        Employee (NetID or UUID)
+                        <input
+                          value={documentRequestForm.employeeRef}
+                          onChange={(event) =>
+                            setDocumentRequestForm((previous) => ({
+                              ...previous,
+                              employeeRef: event.target.value
+                            }))
+                          }
+                          placeholder="e.g. ioan or employee UUID"
+                          required
+                        />
+                      </label>
+                      <label>
+                        Document details
+                        <textarea
+                          className="compact-textarea"
+                          rows={3}
+                          value={documentRequestForm.requestBody}
+                          onChange={(event) =>
+                            setDocumentRequestForm((previous) => ({
+                              ...previous,
+                              requestBody: event.target.value
+                            }))
+                          }
+                          placeholder="What document should the employee provide?"
+                          required
+                        />
+                      </label>
+                      <button type="submit" disabled={activeTaskId === "request-document"}>
+                        {activeTaskId === "request-document"
+                          ? "Sending..."
+                          : "Request employee document"}
+                      </button>
+                    </form>
+                  </article>
+
+                  <article className="task-card">
+                    <h4>Terminate contract</h4>
+                    <form className="stack" onSubmit={terminateContract}>
+                      <label>
+                        Contract ID
+                        <input
+                          value={terminateContractForm.contractId}
+                          onChange={(event) =>
+                            setTerminateContractForm({ contractId: event.target.value })
+                          }
+                          placeholder="Contract UUID"
+                          required
+                        />
+                      </label>
+                      <button type="submit" disabled={activeTaskId === "terminate-contract"}>
+                        {activeTaskId === "terminate-contract"
+                          ? "Terminating..."
+                          : "Terminate contract"}
+                      </button>
+                    </form>
+                  </article>
+
+                  <article className="task-card">
+                    <h4>Create salary scale</h4>
+                    <form className="stack" onSubmit={createSalaryScale}>
+                      <div className="form-three-col">
+                        <label>
+                          Min pay
+                          <input
+                            type="number"
+                            min="0"
+                            value={salaryScaleForm.minimumPay}
+                            onChange={(event) =>
+                              setSalaryScaleForm((previous) => ({
+                                ...previous,
+                                minimumPay: event.target.value
+                              }))
+                            }
+                            required
+                          />
+                        </label>
+                        <label>
+                          Max pay
+                          <input
+                            type="number"
+                            min="0"
+                            value={salaryScaleForm.maximumPay}
+                            onChange={(event) =>
+                              setSalaryScaleForm((previous) => ({
+                                ...previous,
+                                maximumPay: event.target.value
+                              }))
+                            }
+                            required
+                          />
+                        </label>
+                        <label>
+                          Step
+                          <input
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value={salaryScaleForm.step}
+                            onChange={(event) =>
+                              setSalaryScaleForm((previous) => ({
+                                ...previous,
+                                step: event.target.value
+                              }))
+                            }
+                            required
+                          />
+                        </label>
+                      </div>
+                      <button type="submit" disabled={activeTaskId === "create-salary-scale"}>
+                        {activeTaskId === "create-salary-scale"
+                          ? "Creating..."
+                          : "Create salary scale"}
+                      </button>
+                    </form>
+                  </article>
+
+                  <article className="task-card">
+                    <h4>Create job position</h4>
+                    <form className="stack" onSubmit={createJobPositionCatalog}>
+                      <label>
+                        Position name
+                        <input
+                          value={jobPositionCatalogForm.name}
+                          onChange={(event) =>
+                            setJobPositionCatalogForm((previous) => ({
+                              ...previous,
+                              name: event.target.value
+                            }))
+                          }
+                          required
+                        />
+                      </label>
+                      <div className="form-three-col">
+                        <label>
+                          Min pay
+                          <input
+                            type="number"
+                            min="0"
+                            value={jobPositionCatalogForm.minimumPay}
+                            onChange={(event) =>
+                              setJobPositionCatalogForm((previous) => ({
+                                ...previous,
+                                minimumPay: event.target.value
+                              }))
+                            }
+                            required
+                          />
+                        </label>
+                        <label>
+                          Max pay
+                          <input
+                            type="number"
+                            min="0"
+                            value={jobPositionCatalogForm.maximumPay}
+                            onChange={(event) =>
+                              setJobPositionCatalogForm((previous) => ({
+                                ...previous,
+                                maximumPay: event.target.value
+                              }))
+                            }
+                            required
+                          />
+                        </label>
+                        <label>
+                          Step
+                          <input
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value={jobPositionCatalogForm.step}
+                            onChange={(event) =>
+                              setJobPositionCatalogForm((previous) => ({
+                                ...previous,
+                                step: event.target.value
+                              }))
+                            }
+                            required
+                          />
+                        </label>
+                      </div>
+                      <button type="submit" disabled={activeTaskId === "create-job-position"}>
+                        {activeTaskId === "create-job-position"
+                          ? "Creating..."
+                          : "Create job position"}
+                      </button>
+                    </form>
+                  </article>
+
+                  <article className="task-card">
+                    <h4>Create pension scheme</h4>
+                    <form className="stack" onSubmit={createPensionScheme}>
+                      <label>
+                        Scheme name
+                        <input
+                          value={pensionSchemeForm.name}
+                          onChange={(event) =>
+                            setPensionSchemeForm({ name: event.target.value })
+                          }
+                          required
+                        />
+                      </label>
+                      <button type="submit" disabled={activeTaskId === "create-pension-scheme"}>
+                        {activeTaskId === "create-pension-scheme"
+                          ? "Creating..."
+                          : "Create pension scheme"}
+                      </button>
+                    </form>
+                  </article>
                 </div>
               </section>
             )}
@@ -2026,6 +2860,7 @@ export default function App() {
                 </p>
               </section>
             ) : (
+              <>
               <section className="portal-grid">
                 <article className="panel">
                   <h2>Create user account</h2>
@@ -2101,6 +2936,227 @@ export default function App() {
                   </div>
                 </article>
               </section>
+
+              <section className="panel task-modules">
+                <h2>Contract and Catalog Management</h2>
+                <p className="helper-text">
+                  Manage contract records and HR catalogs without manually crafting API payloads.
+                </p>
+                <div className="task-grid">
+                  <article className="task-card">
+                    <h4>Lookup contract</h4>
+                    <form className="stack" onSubmit={lookupContract}>
+                      <label>
+                        Contract ID
+                        <input
+                          value={contractLookupForm.contractId}
+                          onChange={(event) =>
+                            setContractLookupForm({ contractId: event.target.value })
+                          }
+                          placeholder="Contract UUID"
+                          required
+                        />
+                      </label>
+                      <button type="submit" disabled={activeTaskId === "lookup-contract"}>
+                        {activeTaskId === "lookup-contract" ? "Checking..." : "Lookup contract"}
+                      </button>
+                    </form>
+                  </article>
+
+                  <article className="task-card">
+                    <h4>Delete contract</h4>
+                    <form className="stack" onSubmit={deleteContract}>
+                      <label>
+                        Contract ID
+                        <input
+                          value={deleteContractForm.contractId}
+                          onChange={(event) =>
+                            setDeleteContractForm({ contractId: event.target.value })
+                          }
+                          placeholder="Contract UUID"
+                          required
+                        />
+                      </label>
+                      <button type="submit" disabled={activeTaskId === "delete-contract"}>
+                        {activeTaskId === "delete-contract" ? "Deleting..." : "Delete contract"}
+                      </button>
+                    </form>
+                  </article>
+
+                  <article className="task-card">
+                    <h4>Update salary scale pay range</h4>
+                    <form className="stack" onSubmit={updateSalaryScaleRange}>
+                      <label>
+                        Salary scale ID
+                        <input
+                          value={salaryScaleUpdateForm.salaryScaleId}
+                          onChange={(event) =>
+                            setSalaryScaleUpdateForm((previous) => ({
+                              ...previous,
+                              salaryScaleId: event.target.value
+                            }))
+                          }
+                          placeholder="Salary scale UUID"
+                          required
+                        />
+                      </label>
+                      <div className="form-two-col">
+                        <label>
+                          New minimum pay (optional)
+                          <input
+                            type="number"
+                            min="0"
+                            value={salaryScaleUpdateForm.minimumPay}
+                            onChange={(event) =>
+                              setSalaryScaleUpdateForm((previous) => ({
+                                ...previous,
+                                minimumPay: event.target.value
+                              }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          New maximum pay (optional)
+                          <input
+                            type="number"
+                            min="0"
+                            value={salaryScaleUpdateForm.maximumPay}
+                            onChange={(event) =>
+                              setSalaryScaleUpdateForm((previous) => ({
+                                ...previous,
+                                maximumPay: event.target.value
+                              }))
+                            }
+                          />
+                        </label>
+                      </div>
+                      <button type="submit" disabled={activeTaskId === "update-salary-scale"}>
+                        {activeTaskId === "update-salary-scale"
+                          ? "Updating..."
+                          : "Update salary scale"}
+                      </button>
+                    </form>
+                  </article>
+
+                  <article className="task-card">
+                    <h4>Rename job position</h4>
+                    <form className="stack" onSubmit={renameJobPosition}>
+                      <label>
+                        Job position ID
+                        <input
+                          value={renameJobPositionForm.jobPositionId}
+                          onChange={(event) =>
+                            setRenameJobPositionForm((previous) => ({
+                              ...previous,
+                              jobPositionId: event.target.value
+                            }))
+                          }
+                          placeholder="Job position UUID"
+                          required
+                        />
+                      </label>
+                      <label>
+                        New name
+                        <input
+                          value={renameJobPositionForm.name}
+                          onChange={(event) =>
+                            setRenameJobPositionForm((previous) => ({
+                              ...previous,
+                              name: event.target.value
+                            }))
+                          }
+                          required
+                        />
+                      </label>
+                      <button type="submit" disabled={activeTaskId === "rename-job-position"}>
+                        {activeTaskId === "rename-job-position"
+                          ? "Renaming..."
+                          : "Rename job position"}
+                      </button>
+                    </form>
+                  </article>
+
+                  <article className="task-card">
+                    <h4>Rename pension scheme</h4>
+                    <form className="stack" onSubmit={renamePensionScheme}>
+                      <label>
+                        Pension scheme ID
+                        <input
+                          value={renamePensionSchemeForm.pensionSchemeId}
+                          onChange={(event) =>
+                            setRenamePensionSchemeForm((previous) => ({
+                              ...previous,
+                              pensionSchemeId: event.target.value
+                            }))
+                          }
+                          placeholder="Pension scheme UUID"
+                          required
+                        />
+                      </label>
+                      <label>
+                        New name
+                        <input
+                          value={renamePensionSchemeForm.name}
+                          onChange={(event) =>
+                            setRenamePensionSchemeForm((previous) => ({
+                              ...previous,
+                              name: event.target.value
+                            }))
+                          }
+                          required
+                        />
+                      </label>
+                      <button type="submit" disabled={activeTaskId === "rename-pension-scheme"}>
+                        {activeTaskId === "rename-pension-scheme"
+                          ? "Renaming..."
+                          : "Rename pension scheme"}
+                      </button>
+                    </form>
+                  </article>
+
+                  <article className="task-card">
+                    <h4>Delete salary/job/pension catalog entry</h4>
+                    <form className="stack" onSubmit={deleteCatalogEntity}>
+                      <label>
+                        Entity type
+                        <select
+                          value={deleteCatalogForm.entityType}
+                          onChange={(event) =>
+                            setDeleteCatalogForm((previous) => ({
+                              ...previous,
+                              entityType: event.target.value
+                            }))
+                          }
+                        >
+                          <option value="salary-scale">Salary scale</option>
+                          <option value="job-position">Job position</option>
+                          <option value="pension-scheme">Pension scheme</option>
+                        </select>
+                      </label>
+                      <label>
+                        Entity ID
+                        <input
+                          value={deleteCatalogForm.entityId}
+                          onChange={(event) =>
+                            setDeleteCatalogForm((previous) => ({
+                              ...previous,
+                              entityId: event.target.value
+                            }))
+                          }
+                          placeholder="UUID"
+                          required
+                        />
+                      </label>
+                      <button type="submit" disabled={activeTaskId === "delete-catalog-entity"}>
+                        {activeTaskId === "delete-catalog-entity"
+                          ? "Deleting..."
+                          : "Delete selected entity"}
+                      </button>
+                    </form>
+                  </article>
+                </div>
+              </section>
+              </>
             )}
           </>
         )}

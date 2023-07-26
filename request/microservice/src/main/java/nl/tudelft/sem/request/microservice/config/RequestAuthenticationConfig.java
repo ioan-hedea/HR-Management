@@ -2,17 +2,18 @@ package nl.tudelft.sem.request.microservice.config;
 
 import nl.tudelft.sem.request.microservice.authentication.JwtAuthenticationEntryPoint;
 import nl.tudelft.sem.request.microservice.authentication.JwtRequestFilter;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
  * The type Web security config.
  */
 @Configuration
-public class RequestAuthenticationConfig extends WebSecurityConfigurerAdapter {
+public class RequestAuthenticationConfig {
     private final transient JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final transient JwtRequestFilter jwtRequestFilter;
 
@@ -22,8 +23,15 @@ public class RequestAuthenticationConfig extends WebSecurityConfigurerAdapter {
         this.jwtRequestFilter = jwtRequestFilter;
     }
 
-    @Override
-    protected void configure(HttpSecurity http) throws Exception {
+    /**
+     * Configures JWT request authentication for the request service.
+     *
+     * @param http http security builder
+     * @return configured security filter chain
+     * @throws Exception if security setup fails
+     */
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.csrf().disable()
                 .authorizeRequests()
                 .antMatchers("/internal/**").permitAll()
@@ -34,6 +42,7 @@ public class RequestAuthenticationConfig extends WebSecurityConfigurerAdapter {
                 .and()
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
+        return http.build();
     }
 
 }

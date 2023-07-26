@@ -14,6 +14,7 @@ eureka:
     instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
 
 security:
+  allowed-origins: ${GATEWAY_ALLOWED_ORIGINS:http://localhost:5173}
   internal-ranges:
     - start: 10.0.0.0
       end: 10.255.255.255

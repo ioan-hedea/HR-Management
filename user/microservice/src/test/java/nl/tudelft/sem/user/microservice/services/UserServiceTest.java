@@ -17,7 +17,6 @@ import java.util.Optional;
 import nl.tudelft.sem.user.commons.entities.utils.Role;
 import nl.tudelft.sem.user.commons.entities.utils.UserModify;
 import nl.tudelft.sem.user.microservice.database.entities.UserEntity;
-import nl.tudelft.sem.user.microservice.database.entities.utils.BaseEntity;
 import nl.tudelft.sem.user.microservice.exceptions.UserNotFoundException;
 import nl.tudelft.sem.user.microservice.service.UserService;
 import nl.tudelft.sem.user.microservice.userapi.UserEntityRepository;
@@ -255,9 +254,9 @@ class UserServiceTest {
     }
 
     @Test
-    void baseDtoNotFound() {
-        BaseEntity baseEntity = null;
-        assertThrows(NullPointerException.class, () -> baseEntity.getDto());
+    void baseDtoFromEntityNotNull() {
+        UserEntity userEntity = new UserEntity("", Role.CANDIDATE, "", "", "", "", "", "");
+        assertNotNull(userEntity.getDto());
     }
 
     @Test
