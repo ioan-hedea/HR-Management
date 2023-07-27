@@ -6,6 +6,12 @@ spring:
   application:
     name: ROUTER-SERVICE
 
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
 eureka:
   client:
     serviceUrl:

@@ -1,0 +1,201 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hr-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - hr_postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  registry:
+    build:
+      context: .
+      dockerfile: docker/spring-service.Dockerfile
+      args:
+        SERVICE_GRADLE_TASK: :gateway:registry:bootJar
+        SERVICE_DIR: gateway/registry
+    container_name: hr-registry
+    restart: unless-stopped
+    ports:
+      - "8761:8761"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  auth:
+    build:
+      context: .
+      dockerfile: docker/spring-service.Dockerfile
+      args:
+        SERVICE_GRADLE_TASK: :authentication-microservice:bootJar
+        SERVICE_DIR: authentication-microservice
+    container_name: hr-auth
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      EUREKA_DEFAULT_ZONE: http://registry:8761/eureka/
+      JWT_SECRET: ${JWT_SECRET}
+      BOOTSTRAP_ADMIN_ENABLED: ${BOOTSTRAP_ADMIN_ENABLED:-true}
+      BOOTSTRAP_ADMIN_NET_ID: ${BOOTSTRAP_ADMIN_NET_ID:-ADMIN}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
+      AUTH_DB_URL: jdbc:postgresql://postgres:5432/hr_auth
+      AUTH_DB_USERNAME: ${AUTH_DB_USERNAME:-hr}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
+      AUTH_DB_DDL_AUTO: ${AUTH_DB_DDL_AUTO:-update}
+    ports:
+      - "8081:8081"
+    depends_on:
+      registry:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  user:
+    build:
+      context: .
+      dockerfile: docker/spring-service.Dockerfile
+      args:
+        SERVICE_GRADLE_TASK: :user:microservice:bootJar
+        SERVICE_DIR: user/microservice
+    container_name: hr-user
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      EUREKA_DEFAULT_ZONE: http://registry:8761/eureka/
+      JWT_SECRET: ${JWT_SECRET}
+      BOOTSTRAP_ADMIN_ENABLED: ${BOOTSTRAP_ADMIN_ENABLED:-true}
+      BOOTSTRAP_ADMIN_NET_ID: ${BOOTSTRAP_ADMIN_NET_ID:-ADMIN}
+      USER_DB_URL: jdbc:postgresql://postgres:5432/hr_user
+      USER_DB_USERNAME: ${USER_DB_USERNAME:-hr}
+      USER_DB_PASSWORD: ${USER_DB_PASSWORD}
+      USER_DB_DDL_AUTO: ${USER_DB_DDL_AUTO:-update}
+    ports:
+      - "8082:8082"
+    depends_on:
+      registry:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  contract:
+    build:
+      context: .
+      dockerfile: docker/spring-service.Dockerfile
+      args:
+        SERVICE_GRADLE_TASK: :contract:microservice:bootJar
+        SERVICE_DIR: contract/microservice
+    container_name: hr-contract
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      EUREKA_DEFAULT_ZONE: http://registry:8761/eureka/
+      JWT_SECRET: ${JWT_SECRET}
+      CONTRACT_DB_URL: jdbc:postgresql://postgres:5432/hr_contract
+      CONTRACT_DB_USERNAME: ${CONTRACT_DB_USERNAME:-hr}
+      CONTRACT_DB_PASSWORD: ${CONTRACT_DB_PASSWORD}
+      CONTRACT_DB_DDL_AUTO: ${CONTRACT_DB_DDL_AUTO:-update}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification:8085}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user:8082}
+    ports:
+      - "8083:8083"
+    depends_on:
+      registry:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  request:
+    build:
+      context: .
+      dockerfile: docker/spring-service.Dockerfile
+      args:
+        SERVICE_GRADLE_TASK: :request:microservice:bootJar
+        SERVICE_DIR: request/microservice
+    container_name: hr-request
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      EUREKA_DEFAULT_ZONE: http://registry:8761/eureka/
+      JWT_SECRET: ${JWT_SECRET}
+      REQUEST_DB_URL: jdbc:postgresql://postgres:5432/hr_request
+      REQUEST_DB_USERNAME: ${REQUEST_DB_USERNAME:-hr}
+      REQUEST_DB_PASSWORD: ${REQUEST_DB_PASSWORD}
+      REQUEST_DB_DDL_AUTO: ${REQUEST_DB_DDL_AUTO:-update}
+      CONTRACT_SERVICE_URL: ${CONTRACT_SERVICE_URL:-http://contract:8083}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification:8085}
+    ports:
+      - "8084:8084"
+    depends_on:
+      registry:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  notification:
+    build:
+      context: .
+      dockerfile: docker/spring-service.Dockerfile
+      args:
+        SERVICE_GRADLE_TASK: :notification:microservice:bootJar
+        SERVICE_DIR: notification/microservice
+    container_name: hr-notification
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      EUREKA_DEFAULT_ZONE: http://registry:8761/eureka/
+      NOTIFICATION_DB_URL: jdbc:postgresql://postgres:5432/hr_notification
+      NOTIFICATION_DB_USERNAME: ${NOTIFICATION_DB_USERNAME:-hr}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      NOTIFICATION_DB_DDL_AUTO: ${NOTIFICATION_DB_DDL_AUTO:-update}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+    ports:
+      - "8085:8085"
+    depends_on:
+      registry:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: .
+      dockerfile: docker/spring-service.Dockerfile
+      args:
+        SERVICE_GRADLE_TASK: :gateway:router:bootJar
+        SERVICE_DIR: gateway/router
+    container_name: hr-gateway
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      EUREKA_DEFAULT_ZONE: http://registry:8761/eureka/
+      GATEWAY_ALLOWED_ORIGINS: ${GATEWAY_ALLOWED_ORIGINS:-http://localhost:5173}
+    ports:
+      - "8080:8080"
+    depends_on:
+      registry:
+        condition: service_started
+      auth:
+        condition: service_started
+      user:
+        condition: service_started
+      contract:
+        condition: service_started
+      request:
+        condition: service_started
+      notification:
+        condition: service_started
+
+volumes:
+  hr_postgres_data:

@@ -31,8 +31,8 @@ fabric.properties
 .gradle
 build/
 gradle-app.setting
-!gradle/wrapper/gradle-wrapper.jar
 **/build/
+**/bin/
 .gradletasknamecache
 
 ### Java ###
@@ -62,3 +62,5 @@ gradle-app.setting
 .vscode/
 .env
 .env.local
+.gradle-user/*
+!gradle/wrapper/gradle-wrapper.jar

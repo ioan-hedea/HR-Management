@@ -27,8 +27,8 @@ plugins {
 archivesBaseName = 'request-commons'
 group = 'nl.tudelft.sem.request'
 version = '0.0.1-SNAPSHOT'
-sourceCompatibility = 11
-targetCompatibility = 11
+sourceCompatibility = 21
+targetCompatibility = 21
 
 repositories {
         mavenCentral()
@@ -38,8 +38,8 @@ dependencies {
         implementation 'com.fasterxml.jackson.core:jackson-annotations:2.14.1'
         implementation 'jakarta.validation:jakarta.validation-api:3.0.2'
 
-        compileOnly 'org.projectlombok:lombok:1.18.24'
-        annotationProcessor 'org.projectlombok:lombok:1.18.24'
+        compileOnly 'org.projectlombok:lombok:1.18.36'
+        annotationProcessor 'org.projectlombok:lombok:1.18.36'
 
         testImplementation('org.junit.jupiter:junit-jupiter:5.9.1')
         testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.9.0'

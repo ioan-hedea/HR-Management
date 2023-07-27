@@ -1,0 +1,10 @@
+.git
+.github
+.gradle
+.run
+frontend/node_modules
+frontend/dist
+**/build
+**/bin
+.env
+.env.local

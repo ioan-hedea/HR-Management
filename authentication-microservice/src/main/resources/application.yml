@@ -8,7 +8,7 @@ jwt:
 
 springdoc:
   swagger-ui:
-    enabled: false
+    enabled: ${AUTH_SWAGGER_ENABLED:true}
 
 spring:
   application:

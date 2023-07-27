@@ -1,7 +1,6 @@
 rootProject.name = 'sem'
 
 include 'authentication-microservice'
-include 'example-microservice'
 
 include 'contract:microservice'
 include 'contract:commons'

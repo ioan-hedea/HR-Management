@@ -27,8 +27,8 @@ plugins {
 archivesBaseName = 'contract-client'
 group = 'nl.tudelft.sem.contract'
 version = '0.0.1-SNAPSHOT'
-sourceCompatibility = 11
-targetCompatibility = 11
+sourceCompatibility = 21
+targetCompatibility = 21
 
 repositories {
     mavenCentral()
@@ -36,8 +36,8 @@ repositories {
 
 dependencies {
     implementation project(path: ':contract:commons')
-    compileOnly 'org.projectlombok:lombok:1.18.24'
-    annotationProcessor 'org.projectlombok:lombok:1.18.24'
+    compileOnly 'org.projectlombok:lombok:1.18.36'
+    annotationProcessor 'org.projectlombok:lombok:1.18.36'
 
     implementation 'org.apache.httpcomponents.client5:httpclient5:5.2.1'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.1'

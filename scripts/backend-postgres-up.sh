@@ -67,9 +67,14 @@ JAVA_VERSION="$(
   java -version 2>&1 | awk -F[\".] '/version/ {print $2; exit}'
 )"
 
-if [[ -n "${JAVA_VERSION}" ]] && [[ "${JAVA_VERSION}" -gt 17 ]]; then
-  echo "[error] Detected Java ${JAVA_VERSION}. Gradle 7.4 in this repo requires Java 17 or lower."
-  echo "Use Java 11 or Java 17, then rerun this script."
+if [[ -z "${JAVA_VERSION}" ]]; then
+  echo "[error] Unable to detect Java version from 'java -version'."
+  exit 1
+fi
+
+if [[ "${JAVA_VERSION}" -lt 21 ]]; then
+  echo "[error] Detected Java ${JAVA_VERSION}. This repo now targets Java 21."
+  echo "Use Java 21 (or newer), then rerun this script."
   exit 1
 fi
 
