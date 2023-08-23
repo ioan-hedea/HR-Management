@@ -59,7 +59,7 @@ Authentication/User/Contract/Request/Notification <--> PostgreSQL (5432)
 - Docker + Docker Compose
 - Node.js 20+
 
-## Quick Start (Local Processes + Postgres Container)
+## Quick Start (Default: Full Docker Compose)
 
 1. Create local environment values:
 
@@ -68,13 +68,19 @@ cp .env.example .env.local
 ```
 
 2. Update `.env.local` with real secrets.
-3. Start Postgres + backend services:
+3. Start Postgres, Eureka, gateway, and all backend services:
 
 ```bash
-./scripts/backend-postgres-up.sh
+docker compose --env-file .env.local -f docker-compose.full.yml up --build -d
 ```
 
-4. Start frontend:
+4. Verify containers are healthy/running:
+
+```bash
+docker compose --env-file .env.local -f docker-compose.full.yml ps
+```
+
+5. Start frontend:
 
 ```bash
 cd frontend
@@ -82,26 +88,64 @@ npm install
 npm run dev
 ```
 
-5. Open `http://localhost:5173`.
+6. Open `http://localhost:5173`.
 
-Stop backend and Postgres:
-
-```bash
-./scripts/backend-postgres-down.sh
-```
-
-## Full Docker Compose (All Backend Services)
-
-Use the full stack compose file to run Postgres, Eureka, gateway, and all backend services in Docker:
-
-```bash
-docker compose --env-file .env.local -f docker-compose.full.yml up --build -d
-```
-
-Stop full stack:
+Stop backend stack:
 
 ```bash
 docker compose --env-file .env.local -f docker-compose.full.yml down
+```
+
+To also remove persisted Postgres data (fresh local reset):
+
+```bash
+docker compose --env-file .env.local -f docker-compose.full.yml down -v
+```
+
+## Tiny Smoke Test (3 curl checks)
+
+Run these after `docker-compose.full.yml` is up:
+
+```bash
+# 1) Gateway health
+curl -sS http://localhost:8080/actuator/health
+
+# 2) Authenticate bootstrap admin through gateway
+curl -sS -X POST http://localhost:8080/auth/authenticate \
+  -H "Content-Type: application/json" \
+  -d '{"netId":"ADMIN","password":"<BOOTSTRAP_ADMIN_PASSWORD>"}'
+
+# 3) Register a new user through gateway (exercises auth -> user integration)
+curl -sS -X POST http://localhost:8080/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"netId":"smoke-user","password":"smoke-password-123"}'
+```
+
+Expected result:
+
+- Health returns status `UP`.
+- Authenticate returns a JWT token payload.
+- Register returns a success payload (or `409` if `smoke-user` already exists from a previous run).
+- For authenticate, use the same password value you set in `.env.local` for `BOOTSTRAP_ADMIN_PASSWORD`.
+
+## Known Issues (Local Dev)
+
+- If Postgres credentials in `.env.local` were changed after an older volume existed, services can fail with auth/DB errors. Fix by running `docker compose --env-file .env.local -f docker-compose.full.yml down -v` and then bringing the stack up again.
+- A `502` on `/register` usually means the auth service is up but user service is not reachable yet. Wait for all services to finish startup, then retry.
+- If the frontend is up but backend stack is not, proxied API requests from `:5173` can fail with connection errors or `502`/`5xx`.
+
+## Alternative: Local Processes + Postgres Container
+
+Use this if you want to run backend services from your IDE using `bootRun`:
+
+```bash
+./scripts/backend-postgres-up.sh
+```
+
+Stop:
+
+```bash
+./scripts/backend-postgres-down.sh
 ```
 
 ## OpenAPI / Swagger

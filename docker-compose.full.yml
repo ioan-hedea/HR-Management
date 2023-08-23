@@ -53,6 +53,7 @@ services:
       AUTH_DB_USERNAME: ${AUTH_DB_USERNAME:-hr}
       AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
       AUTH_DB_DDL_AUTO: ${AUTH_DB_DDL_AUTO:-update}
+      SERVICE_USER_URL: ${SERVICE_USER_URL:-http://user:8082}
     ports:
       - "8081:8081"
     depends_on:
@@ -105,8 +106,8 @@ services:
       CONTRACT_DB_USERNAME: ${CONTRACT_DB_USERNAME:-hr}
       CONTRACT_DB_PASSWORD: ${CONTRACT_DB_PASSWORD}
       CONTRACT_DB_DDL_AUTO: ${CONTRACT_DB_DDL_AUTO:-update}
-      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification:8085}
-      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user:8082}
+      SERVICE_NOTIFICATION_URL: ${SERVICE_NOTIFICATION_URL:-http://notification:8085}
+      SERVICE_USER_URL: ${SERVICE_USER_URL:-http://user:8082}
     ports:
       - "8083:8083"
     depends_on:
@@ -132,8 +133,8 @@ services:
       REQUEST_DB_USERNAME: ${REQUEST_DB_USERNAME:-hr}
       REQUEST_DB_PASSWORD: ${REQUEST_DB_PASSWORD}
       REQUEST_DB_DDL_AUTO: ${REQUEST_DB_DDL_AUTO:-update}
-      CONTRACT_SERVICE_URL: ${CONTRACT_SERVICE_URL:-http://contract:8083}
-      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification:8085}
+      SERVICE_CONTRACT_URL: ${SERVICE_CONTRACT_URL:-http://contract:8083}
+      SERVICE_NOTIFICATION_URL: ${SERVICE_NOTIFICATION_URL:-http://notification:8085}
     ports:
       - "8084:8084"
     depends_on:
